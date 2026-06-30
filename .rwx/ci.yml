@@ -24,14 +24,13 @@ base:
   config: rwx/base 1.1.1
 
 tasks:
-  # Clone the repo. For a public repo you can drop `github-token`; for a private
-  # repo it requires the RWX GitHub app to be installed (provides github.token).
+  # Clone the repo. Public repo, so no github-token is needed. (For a private
+  # repo, install the RWX GitHub app and add `github-token: ${{ github.token }}`.)
   - key: code
-    call: git/clone 2.0.7
+    call: git/clone 2.0.8
     with:
       repository: https://github.com/chrismo/rwx-tui.git
       ref: ${{ init.commit-sha }}
-      github-token: ${{ github.token }}
 
   - key: go
     call: golang/install 1.2.1
