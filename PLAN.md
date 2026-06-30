@@ -389,7 +389,7 @@ and macOS notifications.
   `ListFilter{Cursor: rl.NextCursor}`; `b`/`a`/`m` toggle `ListFilter`
   (branch/all/mine) and re-issue `listRunsCmd`. Reuses `ListRuns` as-is.
   Independent of 1–3.
-- [ ] 5. **Live poller** — when an open run is `!Completed`, a `tea.Tick` loop
+- [x] 5. **Live poller** — when an open run is `!Completed`, a `tea.Tick` loop
   emits `pollMsg` → re-`Results` + rebuild `Build`/`Layout`, preserving
   `selectedNode`; widen the interval as running-task count drops; stop at
   `Completed`. Composes with item 2.

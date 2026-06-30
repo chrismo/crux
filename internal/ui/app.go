@@ -344,6 +344,46 @@ func openRunCmd(c *rwx.Client, id string) tea.Cmd {
 	}
 }
 
+// pollMsg fires on the poll interval while an in-flight run is open.
+type pollMsg struct{}
+
+// runRefreshedMsg carries a poll refresh of the open run (unlike runOpenedMsg it
+// preserves the cursor and scroll position).
+type runRefreshedMsg struct {
+	run rwx.Run
+	err error
+}
+
+func refreshRunCmd(c *rwx.Client, id string) tea.Cmd {
+	return func() tea.Msg {
+		r, err := c.Results(context.Background(), id)
+		return runRefreshedMsg{run: r, err: err}
+	}
+}
+
+func pollTick(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return pollMsg{} })
+}
+
+// pollInterval backs off as fewer tasks are active.
+func pollInterval(run rwx.Run) time.Duration {
+	active := 0
+	for _, t := range run.Tasks {
+		switch t.Status.Execution {
+		case "running", "ready", "waiting":
+			active++
+		}
+	}
+	switch {
+	case active > 4:
+		return 2 * time.Second
+	case active > 0:
+		return 4 * time.Second
+	default:
+		return 6 * time.Second
+	}
+}
+
 // reloadList applies a new filter and reloads the run list from the first page.
 func (a App) reloadList(f rwx.ListFilter) (tea.Model, tea.Cmd) {
 	a.cfg.Filter = f
@@ -430,6 +470,28 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.resize()
 		a.refresh()
 		a.viewport.GotoTop()
+		if m.err == nil && !a.run.Completed {
+			return a, pollTick(pollInterval(a.run)) // live-poll until it finishes
+		}
+		return a, nil
+	case pollMsg:
+		if a.mode == modeGraph && !a.run.Completed {
+			return a, refreshRunCmd(a.client, a.run.RunID)
+		}
+		return a, nil
+	case runRefreshedMsg:
+		if m.err == nil {
+			a.run = m.run
+			a.graph = graph.Build(m.run)
+			a.layout = graph.Layout(a.graph)
+			if a.graph.Node(a.selectedNode) == nil {
+				a.selectedNode = firstNode(a.layout) // selection vanished; reset
+			}
+			a.refresh() // preserve scroll position (no GotoTop)
+		}
+		if a.mode == modeGraph && !a.run.Completed {
+			return a, pollTick(pollInterval(a.run)) // keep polling
+		}
 		return a, nil
 	case logsLoadedMsg:
 		switch {

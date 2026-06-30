@@ -3,11 +3,72 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/chrismo/rwx-tui/internal/rwx"
 )
+
+func inflightRun() rwx.Run {
+	return rwx.Run{
+		RunID:     "r1",
+		Completed: false,
+		Tasks: []rwx.Task{
+			{Key: "a", Status: rwx.TaskStatus{Execution: "running"}},
+			{Key: "b", Status: rwx.TaskStatus{Execution: "waiting"}},
+		},
+	}
+}
+
+func TestLivePollerStartsOnlyForInFlight(t *testing.T) {
+	a := NewApp(nil, AppConfig{})
+	if _, cmd := a.Update(runOpenedMsg{run: inflightRun()}); cmd == nil {
+		t.Error("in-flight run should start polling")
+	}
+	b := NewApp(nil, AppConfig{})
+	if _, cmd := b.Update(runOpenedMsg{run: loadRun(t, "run_succeeded.json")}); cmd != nil {
+		t.Error("completed run should not poll")
+	}
+}
+
+func TestPollMsgRefreshesInFlight(t *testing.T) {
+	a := NewApp(nil, AppConfig{})
+	m, _ := a.Update(runOpenedMsg{run: inflightRun()})
+	a = m.(App)
+	if _, cmd := a.Update(pollMsg{}); cmd == nil {
+		t.Error("pollMsg should refresh while in-flight")
+	}
+}
+
+func TestRefreshPreservesSelection(t *testing.T) {
+	a := openGraph(t, "run_succeeded.json")
+	a.selectedNode = "test"
+	m, _ := a.Update(runRefreshedMsg{run: loadRun(t, "run_succeeded.json")})
+	a = m.(App)
+	if a.selectedNode != "test" {
+		t.Errorf("selection = %q, want test (preserved across refresh)", a.selectedNode)
+	}
+}
+
+func TestPollIntervalBackoff(t *testing.T) {
+	mk := func(n int, exec string) rwx.Run {
+		r := rwx.Run{}
+		for i := 0; i < n; i++ {
+			r.Tasks = append(r.Tasks, rwx.Task{Status: rwx.TaskStatus{Execution: exec}})
+		}
+		return r
+	}
+	if got := pollInterval(mk(5, "running")); got != 2*time.Second {
+		t.Errorf("many active = %v, want 2s", got)
+	}
+	if got := pollInterval(mk(1, "running")); got != 4*time.Second {
+		t.Errorf("few active = %v, want 4s", got)
+	}
+	if got := pollInterval(mk(2, "finished")); got != 6*time.Second {
+		t.Errorf("none active = %v, want 6s", got)
+	}
+}
 
 // The footer keybar is generated from the keymap, so labels can't drift from
 // behavior. Verify the mode-aware short help and the ? full overlay.
