@@ -295,12 +295,37 @@ Work happens in `/Users/chrismo/modev/rwx-tui`.
 ## Autonomous session backlog (bounded "how far")
 
 Scope for an unattended `/goal` run: take the interactive tool to
-feature-complete, in order. **Out of scope this run** (deliberate follow-ups, do
-not start them): local storage (JSON/SuperDB), release / cross-compile (`dist`,
-`.rwx/release.yml`), and macOS notifications.
+feature-complete, in order — **Phase 0 (foundation) first**, then items 1–5.
+**Out of scope this run** (deliberate follow-ups, do not start them): local
+storage (JSON/SuperDB), release / cross-compile (`dist`, `.rwx/release.yml`),
+and macOS notifications.
+
+### TUI conventions & baseline (required — every UI change must satisfy these)
+
+- **Responsive:** handle `tea.WindowSizeMsg`; store `width/height`; reflow.
+  Never hardcode dimensions.
+- **Scroll:** content larger than the terminal scrolls via a `bubbles/viewport`;
+  never clip silently.
+- **Keymap centralized & discoverable:** all bindings in one `internal/ui/keys.go`
+  (`key.Binding`); the footer keybar and the `?` overlay are **generated** from
+  them via `bubbles/help` — no literal hint strings that can drift.
+- **Async has feedback:** all I/O via `tea.Cmd`; a `bubbles/spinner` during
+  loads; never block the UI thread.
+- **Theme, not literals:** one `internal/ui/theme.go` of semantic `lipgloss`
+  styles on `AdaptiveColor` (light/dark); no scattered `lipgloss.Color("N")`.
+- **Errors & empty states:** non-fatal errors shown in-UI, not crashes.
+- **`--print` parity is invariant:** every view keeps a pure string-render path
+  (`Screen`/`HomeView` → `RenderGraph`/`RenderRunList`); the body bytes the
+  interactive viewport scrolls are a substring of `--print` output. A golden test
+  in `internal/ui` guards this.
+- **Mouse:** wheel scroll + click-to-select via `tea.WithMouseCellMotion`.
+- **Stay on the bubbletea v1 line:** pin `bubbles` to a v0.x tag compatible with
+  `bubbletea v1.3.10` / `lipgloss v1.1.0`; do **not** pull a v2 (it forces a tea
+  major upgrade across every `Update`).
 
 **Definition of Done — applies to every item below:**
-1. Pure logic written test-first (red → green).
+1. Pure logic written test-first (red → green); `--print` body-parity preserved
+   (the `internal/ui` golden test passes).
 2. `./build.sh ci` passes (vet + test + build) — paste the summary.
 3. Feature demonstrated via `./bin/rwxtui … --print` output where it is visible.
 4. Dogfood CI green: `rwx run .rwx/ci.yml --wait` → `succeeded` — paste the status.
@@ -308,20 +333,69 @@ not start them): local storage (JSON/SuperDB), release / cross-compile (`dist`,
 6. Item checked off in this list.
 
 **Backlog (in order):**
-- [ ] 1. **Focus/filter** (the 4th graph win) — `internal/graph/focus.go`:
-  ancestor+descendant subgraph of a node, with fixture tests. UI: `/` filters
-  task keys live; `f` isolates the selected node's subgraph and dims the rest.
-- [ ] 2. **Interactive graph viewport** — node selection (move a cursor across
-  nodes with arrows/hjkl) and scroll/pan when the graph exceeds the terminal;
-  selection is what `f` and the detail pane act on.
-- [ ] 3. **Detail pane + logs** — `enter` on the selected node opens a pane
-  (status, cache info, timing, `Messages`/`ResultPrompt`); a key downloads logs
-  via `rwx logs <id> --task <key>`.
-- [ ] 4. **Run-list polish** — scroll + pagination (`NextCursor`) on the home
-  list, and `b`/`a`/`m` filter toggles (branch / all / mine).
-- [ ] 5. **Live poller** — snapshot-poll `results --json` on an interval while a
-  run is in-flight; update the open graph and refresh the list. Back off as the
-  run nears completion; stop when `Completed`.
+
+- [ ] 0. **Phase 0: TUI foundation** — build the baseline before features.
+  Sequence: deps → theme → keymap → resize → viewport → spinner → mouse.
+  - **P0.1 Deps:** `go get github.com/charmbracelet/bubbles@<v1-compatible tag>`;
+    promote `lipgloss` to a direct require; `go mod tidy`; `./build.sh vet`
+    before touching UI. (`key`, `help`, `viewport`, `spinner` now; `textinput`,
+    `paginator` wired in items 1 & 4.)
+  - **P0.2 Theme — new `internal/ui/theme.go`:** semantic styles (`Success`,
+    `CacheHit`, `Running`, `Muted`, `Failure`, `Special`, `Critical`, `Blast`,
+    `Selected`, `Header`) on `lipgloss.AdaptiveColor`; package-level
+    `var theme = defaultTheme()` so pure-func signatures are unchanged. Add
+    `theme.State(DisplayState)` / `theme.RunStatus(RunStatus)` replacing the
+    color lookups in `graphview.go stateStyles` and `listview.go runGlyph`.
+    **Move only color application — keep glyphs and row layout identical** (tests
+    assert them).
+  - **P0.3 Keymap — new `internal/ui/keys.go`:** `keyMap` of `key.Binding`
+    (↑↓←→ + hjkl, enter, esc/back, q/ctrl+c, `?`, `/`, `r`, `g`/`G`) implementing
+    `help.KeyMap` with mode-aware `ShortHelp`; `app.go handleKey` → `key.Matches`;
+    delete the literal footer strings (footer becomes `help.Model.View`).
+  - **P0.4 Resize:** `width,height` on `App`; handle `tea.WindowSizeMsg`
+    (viewport size = width × bodyHeight, bodyHeight = height − header − footer via
+    `lipgloss.Height`); seed 80×24 to avoid a zero-size first frame. `Model`
+    (`--print`) stays size-agnostic.
+  - **P0.5 Viewport:** one `viewport.Model` on `App`, content swapped per mode.
+    Extract `renderGraphBody()`/`renderListBody()` that BOTH `Screen`/`HomeView`
+    (`--print`) and `App.refreshViewportContent()` call, so the viewport bytes are
+    a substring of `--print`. `App.View()` =
+    `JoinVertical(header, viewport.View(), help footer)`.
+  - **P0.6 Spinner:** `spinner.Model` on `App`; `Init` batches `spinner.Tick`;
+    advance only in `modeLoading`; render `spinner.View()+" loading…"`.
+  - **P0.7 Mouse:** `tea.WithMouseCellMotion()` in `main.go`; `App.Update` handles
+    `tea.MouseMsg` — wheel → viewport; left-click in list → map `Y` to a run index
+    and select.
+  - **Acceptance:** add the `internal/ui` golden test snapshotting `Screen`/
+    `HomeView` body; the only intentional `--print` change is the removed footer
+    literal — update any test asserting it (grep first).
+
+- [ ] 1. **Focus/filter** (the 4th graph win) — new `internal/graph/focus.go`
+  `Focus(g,key) map[string]bool` = ancestors+descendants closure (mirror
+  `failure.go`'s `descendants` walk + a reversed-edge `ancestors` walk), with
+  fixture tests. `RenderOpts` gains `Focus` (dim non-members via `theme.Muted`)
+  and a live `/` `textinput` filter predicate on node key. The `f`-isolate half
+  needs selection (item 2); the `/` filter does not.
+- [ ] 2. **Node selection + scroll** — add `selectedNode` to `App`; nav keys move
+  a cursor over `LayoutData.Layers`/`Pos`; `RenderOpts.Selected` highlights it
+  (`theme.Selected`); scroll the viewport to keep it visible. **Prereq for items
+  1(`f`) and 3.**
+- [ ] 3. **Detail pane + logs** — new `internal/ui/detailview.go` pure
+  `RenderDetail` (status, cache, timing, `Messages`/`ResultPrompt`); `enter` on
+  the selected node opens it (`JoinHorizontal` split); new
+  `rwx.Client.Logs(ctx,id,key)` shelling `rwx logs <id> --task <key>` (mirror
+  `Results`). **Prereq: item 2.**
+- [ ] 4. **Run-list pagination + filters** — `paginator.Model`; next page via
+  `ListFilter{Cursor: rl.NextCursor}`; `b`/`a`/`m` toggle `ListFilter`
+  (branch/all/mine) and re-issue `listRunsCmd`. Reuses `ListRuns` as-is.
+  Independent of 1–3.
+- [ ] 5. **Live poller** — when an open run is `!Completed`, a `tea.Tick` loop
+  emits `pollMsg` → re-`Results` + rebuild `Build`/`Layout`, preserving
+  `selectedNode`; widen the interval as running-task count drops; stop at
+  `Completed`. Composes with item 2.
+
+**Sequencing:** Phase 0 → item 2 (selection) before items 3 and 1's `f`; item 5
+after item 2; items 4 and 1's `/`-filter are independent.
 
 **Stop:** if an item is genuinely blocked, or at the turn cap, stop and summarize
 what is done and what remains, with the checklist state.
