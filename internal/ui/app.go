@@ -58,9 +58,15 @@ func Screen(run rwx.Run, g *graph.Graph, l *graph.LayoutData) string {
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Render(line))
 		b.WriteString("\n")
 	}
+
+	fi := graph.AnalyzeFailures(g)
+	if line := FailureLine(fi); line != "" {
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render(line))
+		b.WriteString("\n")
+	}
 	b.WriteString("\n")
 
-	b.WriteString(RenderGraph(g, l, cp))
+	b.WriteString(RenderGraph(g, l, RenderOpts{Crit: cp, Failure: fi}))
 	b.WriteString("\n")
 	b.WriteString(lipgloss.NewStyle().Faint(true).Render(Legend()))
 	b.WriteString("\n")

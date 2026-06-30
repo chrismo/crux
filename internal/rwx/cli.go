@@ -18,13 +18,17 @@ func NewClient() *Client {
 }
 
 // Results fetches a run and its full task tree via `rwx results <id> --json`.
+//
+// Note: `rwx results` exits non-zero when the run itself failed, while still
+// printing the JSON to stdout. So we try to parse stdout first and only surface
+// the exec error if the output isn't valid JSON.
 func (c *Client) Results(ctx context.Context, runID string) (Run, error) {
-	out, err := c.exec(ctx, "rwx", "results", runID, "--json")
-	if err != nil {
-		return Run{}, fmt.Errorf("rwx results %s: %w", runID, err)
-	}
+	out, execErr := c.exec(ctx, "rwx", "results", runID, "--json")
 	var run Run
 	if err := json.Unmarshal(out, &run); err != nil {
+		if execErr != nil {
+			return Run{}, fmt.Errorf("rwx results %s: %w", runID, execErr)
+		}
 		return Run{}, fmt.Errorf("parse rwx results %s: %w", runID, err)
 	}
 	return run, nil
