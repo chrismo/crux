@@ -15,6 +15,7 @@ type keyMap struct {
 	Quit    key.Binding
 	Help    key.Binding
 	Filter  key.Binding
+	Isolate key.Binding
 	Refresh key.Binding
 	Top     key.Binding
 	Bottom  key.Binding
@@ -31,6 +32,7 @@ func defaultKeyMap() keyMap {
 		Quit:    key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Filter:  key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+		Isolate: key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "isolate")),
 		Refresh: key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
 		Top:     key.NewBinding(key.WithKeys("g", "home"), key.WithHelp("g", "top")),
 		Bottom:  key.NewBinding(key.WithKeys("G", "end"), key.WithHelp("G", "bottom")),
@@ -50,7 +52,7 @@ func (h modeHelp) ShortHelp() []key.Binding {
 	case modeList:
 		return []key.Binding{h.keys.Up, h.keys.Down, h.keys.Enter, h.keys.Filter, h.keys.Refresh, h.keys.Help, h.keys.Quit}
 	case modeGraph:
-		return []key.Binding{h.keys.Up, h.keys.Down, h.keys.Left, h.keys.Right, h.keys.Back, h.keys.Filter, h.keys.Help, h.keys.Quit}
+		return []key.Binding{h.keys.Up, h.keys.Down, h.keys.Left, h.keys.Right, h.keys.Isolate, h.keys.Filter, h.keys.Back, h.keys.Help, h.keys.Quit}
 	default:
 		return []key.Binding{h.keys.Help, h.keys.Quit}
 	}
@@ -59,7 +61,7 @@ func (h modeHelp) ShortHelp() []key.Binding {
 func (h modeHelp) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{h.keys.Up, h.keys.Down, h.keys.Left, h.keys.Right, h.keys.Top, h.keys.Bottom},
-		{h.keys.Enter, h.keys.Back, h.keys.Filter, h.keys.Refresh},
+		{h.keys.Enter, h.keys.Back, h.keys.Filter, h.keys.Isolate, h.keys.Refresh},
 		{h.keys.Help, h.keys.Quit},
 	}
 }

@@ -370,7 +370,7 @@ and macOS notifications.
     `HomeView` body; the only intentional `--print` change is the removed footer
     literal — update any test asserting it (grep first).
 
-- [ ] 1. **Focus/filter** (the 4th graph win) — new `internal/graph/focus.go`
+- [x] 1. **Focus/filter** (the 4th graph win) — new `internal/graph/focus.go`
   `Focus(g,key) map[string]bool` = ancestors+descendants closure (mirror
   `failure.go`'s `descendants` walk + a reversed-edge `ancestors` walk), with
   fixture tests. `RenderOpts` gains `Focus` (dim non-members via `theme.Muted`)

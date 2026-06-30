@@ -112,3 +112,70 @@ func TestGraphSelectionNav(t *testing.T) {
 		t.Errorf("after right = %q, want go", a.selectedNode)
 	}
 }
+
+func openGraph(t *testing.T, fixture string) App {
+	t.Helper()
+	a := NewApp(nil, AppConfig{})
+	m, _ := a.Update(runOpenedMsg{run: loadRun(t, fixture)})
+	a = m.(App)
+	m, _ = a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	return m.(App)
+}
+
+func TestGraphFocusToggle(t *testing.T) {
+	a := openGraph(t, "run_failed.json")
+	if a.selectedNode != "code" {
+		t.Fatalf("initial selection = %q, want code", a.selectedNode)
+	}
+
+	press := func(s string) {
+		m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)})
+		a = m.(App)
+	}
+
+	press("f") // isolate code's cone
+	if a.focus == nil {
+		t.Fatal("focus not set after f")
+	}
+	if !a.focus["code"] || !a.focus["deps"] {
+		t.Errorf("focus should include code's cone: %v", a.focus)
+	}
+	if a.focus["go"] {
+		t.Errorf("focus should exclude go (unrelated): %v", a.focus)
+	}
+
+	press("f") // toggle off
+	if a.focus != nil {
+		t.Errorf("focus not cleared on second f: %v", a.focus)
+	}
+}
+
+func TestGraphFilterTyping(t *testing.T) {
+	a := openGraph(t, "run_succeeded.json")
+
+	press := func(s string) {
+		m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)})
+		a = m.(App)
+	}
+
+	press("/")
+	if !a.filtering {
+		t.Fatal("/ did not activate the filter input")
+	}
+	press("v")
+	press("e")
+	press("t")
+	if got := a.filterInput.Value(); got != "vet" {
+		t.Errorf("filter value = %q, want vet", got)
+	}
+
+	// Enter keeps the filter and closes the input.
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	a = m.(App)
+	if a.filtering {
+		t.Error("enter should close the filter input")
+	}
+	if a.filterInput.Value() != "vet" {
+		t.Error("enter should keep the filter value")
+	}
+}

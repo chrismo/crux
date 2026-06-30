@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -46,13 +47,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	return Screen(m.run, m.graph, m.layout, "")
+	return Screen(m.run, m.graph, m.layout, graphOverlay{})
+}
+
+// graphOverlay carries the interactive overlays (cursor + focus/filter) into
+// Screen. The zero value (used by --print) shows no overlays.
+type graphOverlay struct {
+	Selected string
+	Focus    map[string]bool
+	Filter   string
 }
 
 // Screen renders the full graph view (header, graph, legend) as a string. Pure,
-// so it backs both View() and the headless --print path. selected highlights a
-// node ("" for none, e.g. --print which has no cursor).
-func Screen(run rwx.Run, g *graph.Graph, l *graph.LayoutData, selected string) string {
+// so it backs both View() and the headless --print path; ov is empty for
+// --print, which has no cursor or filter.
+func Screen(run rwx.Run, g *graph.Graph, l *graph.LayoutData, ov graphOverlay) string {
 	var b strings.Builder
 
 	status := run.ResultStatus
@@ -76,7 +85,10 @@ func Screen(run rwx.Run, g *graph.Graph, l *graph.LayoutData, selected string) s
 	}
 	b.WriteString("\n")
 
-	b.WriteString(RenderGraph(g, l, RenderOpts{Crit: cp, Failure: fi, Selected: selected}))
+	b.WriteString(RenderGraph(g, l, RenderOpts{
+		Crit: cp, Failure: fi,
+		Selected: ov.Selected, Focus: ov.Focus, Filter: ov.Filter,
+	}))
 	b.WriteString("\n")
 	b.WriteString(theme.Faint.Render(Legend()))
 	b.WriteString("\n")
@@ -147,7 +159,10 @@ type App struct {
 	run          rwx.Run
 	graph        *graph.Graph
 	layout       *graph.LayoutData
-	selectedNode string // key of the highlighted graph node
+	selectedNode string          // key of the highlighted graph node
+	focus        map[string]bool // f-isolated subgraph (nil = no focus)
+	filtering    bool            // the / filter input is active
+	filterInput  textinput.Model
 
 	err error
 }
@@ -157,7 +172,11 @@ type App struct {
 func NewApp(client *rwx.Client, cfg AppConfig) App {
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
 	sp.Style = theme.Running
+	ti := textinput.New()
+	ti.Prompt = "filter: "
+	ti.CharLimit = 64
 	return App{
+		filterInput: ti,
 		client:   client,
 		cfg:      cfg,
 		now:      time.Now,
@@ -178,7 +197,11 @@ func (a App) bodyContent() string {
 	case modeList:
 		return HomeView(a.runs, a.selected, a.now())
 	case modeGraph:
-		return Screen(a.run, a.graph, a.layout, a.selectedNode)
+		return Screen(a.run, a.graph, a.layout, graphOverlay{
+			Selected: a.selectedNode,
+			Focus:    a.focus,
+			Filter:   a.filterInput.Value(),
+		})
 	default:
 		return ""
 	}
@@ -367,6 +390,26 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.viewport.GotoTop()
 		return a, nil
 	case tea.KeyMsg:
+		// While the / filter input is active, keystrokes edit it; esc clears and
+		// closes, enter keeps the filter and closes.
+		if a.filtering {
+			switch {
+			case key.Matches(m, a.keys.Back):
+				a.filtering = false
+				a.filterInput.Blur()
+				a.filterInput.SetValue("")
+			case m.Type == tea.KeyEnter:
+				a.filtering = false
+				a.filterInput.Blur()
+			default:
+				var cmd tea.Cmd
+				a.filterInput, cmd = a.filterInput.Update(m)
+				a.refresh()
+				return a, cmd
+			}
+			a.refresh()
+			return a, nil
+		}
 		model, cmd := a.handleKey(m)
 		a = model.(App)
 		a.refresh()
@@ -425,6 +468,16 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.moveSelection(0, -1)
 		case key.Matches(k, a.keys.Right):
 			a.moveSelection(0, 1)
+		case key.Matches(k, a.keys.Filter):
+			a.filtering = true
+			a.filterInput.Focus()
+			return a, textinput.Blink
+		case key.Matches(k, a.keys.Isolate):
+			if a.focus != nil {
+				a.focus = nil // toggle off
+			} else if a.selectedNode != "" {
+				a.focus = graph.Focus(a.graph, a.selectedNode)
+			}
 		}
 	}
 	return a, nil
@@ -439,6 +492,9 @@ func (a App) View() string {
 		return a.spinner.View() + " " + theme.Faint.Render("loading…")
 	case modeList, modeGraph:
 		footer := a.footerView()
+		if a.filtering {
+			footer = a.filterInput.View() + "\n" + footer
+		}
 		if a.err != nil && a.mode == modeList {
 			footer = theme.Failure.Render(fmt.Sprintf("error: %v", a.err)) + "\n" + footer
 		}

@@ -37,6 +37,20 @@ type RenderOpts struct {
 	Crit     *graph.CritPath    // critical path: thick border (may be nil)
 	Failure  *graph.FailureInfo // failures + blast radius (may be nil)
 	Selected string             // selected node key: double border + reverse ("" = none)
+	Focus    map[string]bool    // if non-nil, nodes outside the set are dimmed
+	Filter   string             // if non-empty, nodes whose key lacks it are dimmed
+}
+
+// dims reports whether a node should be de-emphasized under the focus/filter
+// overlays.
+func (o RenderOpts) dims(key string) bool {
+	if o.Focus != nil && !o.Focus[key] {
+		return true
+	}
+	if o.Filter != "" && !strings.Contains(strings.ToLower(key), strings.ToLower(o.Filter)) {
+		return true
+	}
+	return false
 }
 
 // this v1 conveys structure via layering and state via color/glyph. Critical-
@@ -50,7 +64,7 @@ func RenderGraph(g *graph.Graph, l *graph.LayoutData, opts RenderOpts) string {
 			onCrit := opts.Crit != nil && opts.Crit.Contains(key)
 			onBlast := opts.Failure != nil && opts.Failure.InBlast(key)
 			selected := opts.Selected != "" && key == opts.Selected
-			cells = append(cells, renderCell(g.Node(key), onCrit, onBlast, selected))
+			cells = append(cells, renderCell(g.Node(key), onCrit, onBlast, selected, opts.dims(key)))
 		}
 		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, cells...))
 	}
@@ -59,7 +73,17 @@ func RenderGraph(g *graph.Graph, l *graph.LayoutData, opts RenderOpts) string {
 	return strings.Join(rows, "\n   │\n") + "\n"
 }
 
-func renderCell(n *graph.Node, onCrit, onBlast, selected bool) string {
+func renderCell(n *graph.Node, onCrit, onBlast, selected, dimmed bool) string {
+	if dimmed {
+		muted := theme.Muted.GetForeground()
+		box := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(muted).
+			Foreground(muted).
+			Padding(0, 1).
+			MarginRight(2)
+		return box.Render(fmt.Sprintf("%s %s", glyphFor(n.State), n.Key))
+	}
 	fg := theme.State(n.State).GetForeground()
 	label := fmt.Sprintf("%s %s", glyphFor(n.State), n.Key)
 	if n.HasTiming && n.DurationSeconds > 0 {
