@@ -26,7 +26,7 @@ func fixtureGraph(t *testing.T) (*graph.Graph, *graph.LayoutData) {
 
 func TestRenderGraphContainsAllNodes(t *testing.T) {
 	g, l := fixtureGraph(t)
-	out := RenderGraph(g, l)
+	out := RenderGraph(g, l, nil)
 
 	for _, key := range []string{"code", "go", "deps", "vet", "test", "build", "~base-image", "~base-config"} {
 		if !strings.Contains(out, key) {
@@ -37,7 +37,7 @@ func TestRenderGraphContainsAllNodes(t *testing.T) {
 
 func TestRenderGraphOrdersLayersTopDown(t *testing.T) {
 	g, l := fixtureGraph(t)
-	out := RenderGraph(g, l)
+	out := RenderGraph(g, l, nil)
 
 	// A layer-0 root must render above a layer-2 leaf.
 	iCode := strings.Index(out, "code")
@@ -52,7 +52,7 @@ func TestRenderGraphOrdersLayersTopDown(t *testing.T) {
 
 func TestRenderGraphUsesStateGlyphs(t *testing.T) {
 	g, l := fixtureGraph(t)
-	out := RenderGraph(g, l)
+	out := RenderGraph(g, l, nil)
 
 	if !strings.Contains(out, glyphFor(rwx.StateRan)) {
 		t.Errorf("expected the 'ran' glyph %q in output", glyphFor(rwx.StateRan))
@@ -60,5 +60,28 @@ func TestRenderGraphUsesStateGlyphs(t *testing.T) {
 	// This run had no failures, so the failed glyph must not appear.
 	if strings.Contains(out, glyphFor(rwx.StateFailed)) {
 		t.Errorf("unexpected 'failed' glyph in a fully-succeeded run")
+	}
+}
+
+func TestRenderGraphMarksCriticalPath(t *testing.T) {
+	g, l := fixtureGraph(t)
+	cp := graph.CriticalPath(g)
+
+	// Without a critical path, every box uses the rounded border.
+	if strings.Contains(RenderGraph(g, l, nil), "┏") {
+		t.Error("did not expect a thick border without a critical path")
+	}
+	// With one, critical nodes switch to a thick border.
+	if !strings.Contains(RenderGraph(g, l, cp), "┏") {
+		t.Error("expected a thick border for critical-path nodes")
+	}
+}
+
+func TestCriticalPathLine(t *testing.T) {
+	g, _ := fixtureGraph(t)
+	got := CriticalPathLine(graph.CriticalPath(g))
+	want := "critical path: code → deps → test · 20s"
+	if got != want {
+		t.Errorf("CriticalPathLine() = %q, want %q", got, want)
 	}
 }

@@ -51,9 +51,16 @@ func Screen(run rwx.Run, g *graph.Graph, l *graph.LayoutData) string {
 	}
 	header := fmt.Sprintf("RWX run %s · %s · %s", short(run.RunID), run.DefinitionPath, status)
 	b.WriteString(lipgloss.NewStyle().Bold(true).Render(header))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
-	b.WriteString(RenderGraph(g, l))
+	cp := graph.CriticalPath(g)
+	if line := CriticalPathLine(cp); line != "" {
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Render(line))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+
+	b.WriteString(RenderGraph(g, l, cp))
 	b.WriteString("\n")
 	b.WriteString(lipgloss.NewStyle().Faint(true).Render(Legend()))
 	b.WriteString("\n")
