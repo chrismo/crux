@@ -73,7 +73,7 @@ func run(opts options) error {
 	}
 
 	app := ui.NewApp(client, ui.AppConfig{Run: opts.run, Filter: filter})
-	_, err := tea.NewProgram(app, tea.WithAltScreen()).Run()
+	_, err := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
 	return err
 }
 

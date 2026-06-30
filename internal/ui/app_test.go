@@ -59,3 +59,25 @@ func TestResizeSizesViewportAndRenders(t *testing.T) {
 		t.Errorf("rendered view missing home header:\n%s", out)
 	}
 }
+
+func TestMouseClickSelectsRow(t *testing.T) {
+	a := NewApp(nil, AppConfig{})
+	m, _ := a.Update(runsLoadedMsg{runs: loadRunList(t)})
+	a = m.(App)
+	m, _ = a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(App)
+
+	// Rows start after the header + blank line, so row index 2 is at Y=4.
+	m, _ = a.Update(tea.MouseMsg{Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, Y: 4})
+	a = m.(App)
+	if a.selected != 2 {
+		t.Errorf("click at Y=4 selected %d, want 2", a.selected)
+	}
+
+	// A wheel event must not panic and leaves selection unchanged.
+	m, _ = a.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	a = m.(App)
+	if a.selected != 2 {
+		t.Errorf("wheel changed selection to %d, want 2", a.selected)
+	}
+}

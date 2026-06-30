@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -133,6 +134,7 @@ type App struct {
 	keys     keyMap
 	help     help.Model
 	showHelp bool
+	spinner  spinner.Model
 
 	width    int
 	height   int
@@ -151,6 +153,8 @@ type App struct {
 // NewApp builds the root model. The viewport is seeded with a sane default size
 // so the first frame renders before the initial WindowSizeMsg arrives.
 func NewApp(client *rwx.Client, cfg AppConfig) App {
+	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
+	sp.Style = theme.Running
 	return App{
 		client:   client,
 		cfg:      cfg,
@@ -158,6 +162,7 @@ func NewApp(client *rwx.Client, cfg AppConfig) App {
 		mode:     modeLoading,
 		keys:     defaultKeyMap(),
 		help:     help.New(),
+		spinner:  sp,
 		width:    80,
 		height:   24,
 		viewport: viewport.New(80, 23),
@@ -224,10 +229,13 @@ func openRunCmd(c *rwx.Client, id string) tea.Cmd {
 }
 
 func (a App) Init() tea.Cmd {
+	var fetch tea.Cmd
 	if a.cfg.Run != "" {
-		return openRunCmd(a.client, a.cfg.Run)
+		fetch = openRunCmd(a.client, a.cfg.Run)
+	} else {
+		fetch = listRunsCmd(a.client, a.cfg.Filter)
 	}
-	return listRunsCmd(a.client, a.cfg.Filter)
+	return tea.Batch(fetch, a.spinner.Tick)
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -236,6 +244,31 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width, a.height = m.Width, m.Height
 		a.resize()
 		a.refresh()
+		return a, nil
+	case spinner.TickMsg:
+		if a.mode != modeLoading {
+			return a, nil // stop animating once loaded
+		}
+		var cmd tea.Cmd
+		a.spinner, cmd = a.spinner.Update(m)
+		return a, cmd
+	case tea.MouseMsg:
+		switch m.Button {
+		case tea.MouseButtonWheelUp, tea.MouseButtonWheelDown:
+			var cmd tea.Cmd
+			a.viewport, cmd = a.viewport.Update(m)
+			return a, cmd
+		case tea.MouseButtonLeft:
+			if m.Action == tea.MouseActionPress && a.mode == modeList {
+				// HomeView is: header line, blank line, then one row per run.
+				idx := m.Y + a.viewport.YOffset - 2
+				if idx >= 0 && idx < len(a.runs) {
+					a.selected = idx
+					a.refresh()
+				}
+			}
+			return a, nil
+		}
 		return a, nil
 	case runsLoadedMsg:
 		a.err = m.err
@@ -303,7 +336,7 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if len(a.runs) > 0 {
 				a.err = nil
 				a.mode = modeLoading
-				return a, openRunCmd(a.client, a.runs[a.selected].ID)
+				return a, tea.Batch(openRunCmd(a.client, a.runs[a.selected].ID), a.spinner.Tick)
 			}
 		}
 	case modeGraph:
@@ -325,7 +358,7 @@ func (a App) View() string {
 	}
 	switch a.mode {
 	case modeLoading:
-		return theme.Faint.Render("loading…")
+		return a.spinner.View() + " " + theme.Faint.Render("loading…")
 	case modeList, modeGraph:
 		footer := a.footerView()
 		if a.err != nil && a.mode == modeList {
