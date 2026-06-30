@@ -163,6 +163,8 @@ type App struct {
 	focus        map[string]bool // f-isolated subgraph (nil = no focus)
 	filtering    bool            // the / filter input is active
 	filterInput  textinput.Model
+	detailOpen   bool   // detail pane shown for the selected node
+	logsContent  string // fetched logs ("" = show task detail instead)
 
 	err error
 }
@@ -197,6 +199,12 @@ func (a App) bodyContent() string {
 	case modeList:
 		return HomeView(a.runs, a.selected, a.now())
 	case modeGraph:
+		if a.detailOpen {
+			if a.logsContent != "" {
+				return a.logsContent
+			}
+			return RenderDetail(a.run.FindTask(a.selectedNode))
+		}
 		return Screen(a.run, a.graph, a.layout, graphOverlay{
 			Selected: a.selectedNode,
 			Focus:    a.focus,
@@ -313,6 +321,18 @@ func listRunsCmd(c *rwx.Client, f rwx.ListFilter) tea.Cmd {
 	}
 }
 
+type logsLoadedMsg struct {
+	content string
+	err     error
+}
+
+func fetchLogsCmd(c *rwx.Client, runID, taskKey string) tea.Cmd {
+	return func() tea.Msg {
+		s, err := c.Logs(context.Background(), runID, taskKey)
+		return logsLoadedMsg{content: s, err: err}
+	}
+}
+
 func openRunCmd(c *rwx.Client, id string) tea.Cmd {
 	return func() tea.Msg {
 		r, err := c.Results(context.Background(), id)
@@ -389,6 +409,18 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.refresh()
 		a.viewport.GotoTop()
 		return a, nil
+	case logsLoadedMsg:
+		switch {
+		case m.err != nil:
+			a.logsContent = "error fetching logs: " + m.err.Error()
+		case strings.TrimSpace(m.content) == "":
+			a.logsContent = "(no logs)"
+		default:
+			a.logsContent = m.content
+		}
+		a.refresh()
+		a.viewport.GotoTop()
+		return a, nil
 	case tea.KeyMsg:
 		// While the / filter input is active, keystrokes edit it; esc clears and
 		// closes, enter keeps the filter and closes.
@@ -415,7 +447,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.refresh()
 		// Graph nav keys move the node cursor; keep it in view. Free scrolling
 		// is still available via the mouse wheel.
-		if a.mode == modeGraph {
+		if a.mode == modeGraph && !a.detailOpen {
 			a.ensureSelectedVisible()
 		}
 		return a, cmd
@@ -452,6 +484,20 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case modeGraph:
+		// When the detail pane is open it captures Back/Logs; other keys are
+		// inert until it closes.
+		if a.detailOpen {
+			switch {
+			case key.Matches(k, a.keys.Back):
+				a.detailOpen = false
+				a.logsContent = ""
+			case key.Matches(k, a.keys.Logs):
+				if a.selectedNode != "" {
+					return a, fetchLogsCmd(a.client, a.run.RunID, a.selectedNode)
+				}
+			}
+			return a, nil
+		}
 		switch {
 		case key.Matches(k, a.keys.Back):
 			if a.hasList {
@@ -460,6 +506,11 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			return a, tea.Quit
+		case key.Matches(k, a.keys.Enter):
+			if a.selectedNode != "" {
+				a.detailOpen = true
+				a.logsContent = ""
+			}
 		case key.Matches(k, a.keys.Up):
 			a.moveSelection(-1, 0)
 		case key.Matches(k, a.keys.Down):

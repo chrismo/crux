@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
 // Client wraps the `rwx` CLI. The exec function is injectable for testing.
@@ -32,6 +35,38 @@ func (c *Client) Results(ctx context.Context, runID string) (Run, error) {
 		return Run{}, fmt.Errorf("parse rwx results %s: %w", runID, err)
 	}
 	return run, nil
+}
+
+// Logs downloads a task's logs via `rwx logs <id> --task <key> --output <dir>`
+// (the CLI writes files rather than printing to stdout) and returns the
+// concatenated .log contents.
+func (c *Client) Logs(ctx context.Context, runID, taskKey string) (string, error) {
+	dir, err := os.MkdirTemp("", "rwxtui-logs-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(dir)
+
+	if _, err := c.exec(ctx, "rwx", "logs", runID, "--task", taskKey, "--output", dir); err != nil {
+		return "", fmt.Errorf("rwx logs %s --task %s: %w", runID, taskKey, err)
+	}
+
+	var b strings.Builder
+	walkErr := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".log") {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		b.Write(data)
+		return nil
+	})
+	if walkErr != nil {
+		return "", walkErr
+	}
+	return b.String(), nil
 }
 
 // runRwx executes the rwx binary and returns stdout. Stderr (e.g. the

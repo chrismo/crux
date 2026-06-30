@@ -380,7 +380,7 @@ and macOS notifications.
   a cursor over `LayoutData.Layers`/`Pos`; `RenderOpts.Selected` highlights it
   (`theme.Selected`); scroll the viewport to keep it visible. **Prereq for items
   1(`f`) and 3.**
-- [ ] 3. **Detail pane + logs** — new `internal/ui/detailview.go` pure
+- [x] 3. **Detail pane + logs** — new `internal/ui/detailview.go` pure
   `RenderDetail` (status, cache, timing, `Messages`/`ResultPrompt`); `enter` on
   the selected node opens it (`JoinHorizontal` split); new
   `rwx.Client.Logs(ctx,id,key)` shelling `rwx logs <id> --task <key>` (mirror

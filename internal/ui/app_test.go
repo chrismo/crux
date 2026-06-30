@@ -150,6 +150,34 @@ func TestGraphFocusToggle(t *testing.T) {
 	}
 }
 
+func TestDetailPaneAndLogs(t *testing.T) {
+	a := openGraph(t, "run_failed.json") // selection starts on "code"
+
+	// enter opens the detail pane for the selected node.
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	a = m.(App)
+	if !a.detailOpen {
+		t.Fatal("enter did not open the detail pane")
+	}
+	if !strings.Contains(a.bodyContent(), "status:") {
+		t.Errorf("detail body missing status:\n%s", a.bodyContent())
+	}
+
+	// A logs result replaces the body with the log content.
+	m, _ = a.Update(logsLoadedMsg{content: "line one\nline two"})
+	a = m.(App)
+	if !strings.Contains(a.bodyContent(), "line two") {
+		t.Errorf("logs not shown in body:\n%s", a.bodyContent())
+	}
+
+	// esc closes the pane and clears logs.
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	a = m.(App)
+	if a.detailOpen || a.logsContent != "" {
+		t.Errorf("esc should close detail and clear logs (open=%v logs=%q)", a.detailOpen, a.logsContent)
+	}
+}
+
 func TestGraphFilterTyping(t *testing.T) {
 	a := openGraph(t, "run_succeeded.json")
 

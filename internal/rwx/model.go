@@ -35,10 +35,42 @@ type Task struct {
 	CacheKey                string     `json:"CacheKey"`
 	CacheHitFromTaskID      string     `json:"CacheHitFromTaskID"`
 	Status                  TaskStatus `json:"Status"`
+	StartedAt               string     `json:"StartedAt"`
+	CompletedAt             string     `json:"CompletedAt"`
 	CompletedRuntimeSeconds *int       `json:"CompletedRuntimeSeconds"`
 	ExecutionRuntimeSeconds *int       `json:"ExecutionRuntimeSeconds"`
+	ArtifactCount           int        `json:"ArtifactCount"`
+	TestCount               *int       `json:"TestCount"`
+	FailedTestCount         *int       `json:"FailedTestCount"`
+	Messages                []Message  `json:"Messages"`
 	RawDefinition           string     `json:"RawDefinition"` // task YAML as it ran; carries `use:`
 	Subtasks                []Task     `json:"Subtasks"`
+}
+
+// Message is a UI message attached to a run or task (errors, skip reasons, …).
+type Message struct {
+	Type     string `json:"Type"`
+	Message  string `json:"Message"`
+	Advice   string `json:"Advice"`
+	FileName string `json:"FileName"`
+	Line     *int   `json:"Line"`
+}
+
+// FindTask returns the task with the given key anywhere in the tree, or nil.
+func (r Run) FindTask(key string) *Task {
+	return findTask(r.Tasks, key)
+}
+
+func findTask(tasks []Task, key string) *Task {
+	for i := range tasks {
+		if tasks[i].Key == key {
+			return &tasks[i]
+		}
+		if t := findTask(tasks[i].Subtasks, key); t != nil {
+			return t
+		}
+	}
+	return nil
 }
 
 // TaskStatus is a task's Status object.
