@@ -34,8 +34,9 @@ func glyphFor(s rwx.DisplayState) string {
 // each layer a row of state-colored node cells. Edge routing is a follow-up;
 // RenderOpts carries the overlays applied to the graph render.
 type RenderOpts struct {
-	Crit    *graph.CritPath    // critical path: thick border (may be nil)
-	Failure *graph.FailureInfo // failures + blast radius (may be nil)
+	Crit     *graph.CritPath    // critical path: thick border (may be nil)
+	Failure  *graph.FailureInfo // failures + blast radius (may be nil)
+	Selected string             // selected node key: double border + reverse ("" = none)
 }
 
 // this v1 conveys structure via layering and state via color/glyph. Critical-
@@ -48,7 +49,8 @@ func RenderGraph(g *graph.Graph, l *graph.LayoutData, opts RenderOpts) string {
 		for _, key := range layer {
 			onCrit := opts.Crit != nil && opts.Crit.Contains(key)
 			onBlast := opts.Failure != nil && opts.Failure.InBlast(key)
-			cells = append(cells, renderCell(g.Node(key), onCrit, onBlast))
+			selected := opts.Selected != "" && key == opts.Selected
+			cells = append(cells, renderCell(g.Node(key), onCrit, onBlast, selected))
 		}
 		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, cells...))
 	}
@@ -57,7 +59,7 @@ func RenderGraph(g *graph.Graph, l *graph.LayoutData, opts RenderOpts) string {
 	return strings.Join(rows, "\n   │\n") + "\n"
 }
 
-func renderCell(n *graph.Node, onCrit, onBlast bool) string {
+func renderCell(n *graph.Node, onCrit, onBlast, selected bool) string {
 	fg := theme.State(n.State).GetForeground()
 	label := fmt.Sprintf("%s %s", glyphFor(n.State), n.Key)
 	if n.HasTiming && n.DurationSeconds > 0 {
@@ -67,7 +69,10 @@ func renderCell(n *graph.Node, onCrit, onBlast bool) string {
 		label += " ↯" // downstream of a failure
 	}
 	border := lipgloss.RoundedBorder()
-	if onCrit {
+	switch {
+	case selected:
+		border = lipgloss.DoubleBorder()
+	case onCrit:
 		border = lipgloss.ThickBorder()
 	}
 	borderColor := fg
@@ -78,7 +83,8 @@ func renderCell(n *graph.Node, onCrit, onBlast bool) string {
 		Border(border).
 		BorderForeground(borderColor).
 		Foreground(fg).
-		Bold(onCrit).
+		Bold(onCrit || selected).
+		Reverse(selected).
 		Padding(0, 1).
 		MarginRight(2)
 	return box.Render(label)

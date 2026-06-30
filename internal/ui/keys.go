@@ -24,8 +24,8 @@ func defaultKeyMap() keyMap {
 	return keyMap{
 		Up:      key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		Down:    key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
-		Left:    key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "back")),
-		Right:   key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "open")),
+		Left:    key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "left")),
+		Right:   key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "right")),
 		Enter:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
 		Back:    key.NewBinding(key.WithKeys("esc", "backspace"), key.WithHelp("esc", "back")),
 		Quit:    key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
@@ -50,7 +50,7 @@ func (h modeHelp) ShortHelp() []key.Binding {
 	case modeList:
 		return []key.Binding{h.keys.Up, h.keys.Down, h.keys.Enter, h.keys.Filter, h.keys.Refresh, h.keys.Help, h.keys.Quit}
 	case modeGraph:
-		return []key.Binding{h.keys.Up, h.keys.Down, h.keys.Back, h.keys.Filter, h.keys.Help, h.keys.Quit}
+		return []key.Binding{h.keys.Up, h.keys.Down, h.keys.Left, h.keys.Right, h.keys.Back, h.keys.Filter, h.keys.Help, h.keys.Quit}
 	default:
 		return []key.Binding{h.keys.Help, h.keys.Quit}
 	}

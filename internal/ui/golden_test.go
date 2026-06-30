@@ -64,13 +64,13 @@ func loadRun(t *testing.T, fixture string) rwx.Run {
 func TestGoldenScreenSucceeded(t *testing.T) {
 	run := loadRun(t, "run_succeeded.json")
 	g := graph.Build(run)
-	goldenCheck(t, "screen_succeeded.txt", Screen(run, g, graph.Layout(g)))
+	goldenCheck(t, "screen_succeeded.txt", Screen(run, g, graph.Layout(g), ""))
 }
 
 func TestGoldenScreenFailed(t *testing.T) {
 	run := loadRun(t, "run_failed.json")
 	g := graph.Build(run)
-	goldenCheck(t, "screen_failed.txt", Screen(run, g, graph.Layout(g)))
+	goldenCheck(t, "screen_failed.txt", Screen(run, g, graph.Layout(g), ""))
 }
 
 func TestGoldenHome(t *testing.T) {

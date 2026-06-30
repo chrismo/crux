@@ -46,12 +46,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	return Screen(m.run, m.graph, m.layout)
+	return Screen(m.run, m.graph, m.layout, "")
 }
 
 // Screen renders the full graph view (header, graph, legend) as a string. Pure,
-// so it backs both View() and the headless --print path.
-func Screen(run rwx.Run, g *graph.Graph, l *graph.LayoutData) string {
+// so it backs both View() and the headless --print path. selected highlights a
+// node ("" for none, e.g. --print which has no cursor).
+func Screen(run rwx.Run, g *graph.Graph, l *graph.LayoutData, selected string) string {
 	var b strings.Builder
 
 	status := run.ResultStatus
@@ -75,7 +76,7 @@ func Screen(run rwx.Run, g *graph.Graph, l *graph.LayoutData) string {
 	}
 	b.WriteString("\n")
 
-	b.WriteString(RenderGraph(g, l, RenderOpts{Crit: cp, Failure: fi}))
+	b.WriteString(RenderGraph(g, l, RenderOpts{Crit: cp, Failure: fi, Selected: selected}))
 	b.WriteString("\n")
 	b.WriteString(theme.Faint.Render(Legend()))
 	b.WriteString("\n")
@@ -143,9 +144,10 @@ type App struct {
 	runs     []rwx.RunSummary
 	selected int
 
-	run    rwx.Run
-	graph  *graph.Graph
-	layout *graph.LayoutData
+	run          rwx.Run
+	graph        *graph.Graph
+	layout       *graph.LayoutData
+	selectedNode string // key of the highlighted graph node
 
 	err error
 }
@@ -176,7 +178,7 @@ func (a App) bodyContent() string {
 	case modeList:
 		return HomeView(a.runs, a.selected, a.now())
 	case modeGraph:
-		return Screen(a.run, a.graph, a.layout)
+		return Screen(a.run, a.graph, a.layout, a.selectedNode)
 	default:
 		return ""
 	}
@@ -185,6 +187,73 @@ func (a App) bodyContent() string {
 // refresh re-feeds the viewport from the current state.
 func (a *App) refresh() {
 	a.viewport.SetContent(a.bodyContent())
+}
+
+// firstNode returns the top-left node key of a layout, or "".
+func firstNode(l *graph.LayoutData) string {
+	if l == nil || len(l.Layers) == 0 || len(l.Layers[0]) == 0 {
+		return ""
+	}
+	return l.Layers[0][0]
+}
+
+// moveSelection moves the graph cursor by dLayer (rows) and dOrder (columns
+// within a layer), clamped to the layout.
+func (a *App) moveSelection(dLayer, dOrder int) {
+	if a.layout == nil || a.selectedNode == "" {
+		return
+	}
+	pos, ok := a.layout.Pos[a.selectedNode]
+	if !ok {
+		return
+	}
+	if dLayer != 0 {
+		target := pos.Layer + dLayer
+		if target < 0 || target >= len(a.layout.Layers) {
+			return
+		}
+		row := a.layout.Layers[target]
+		idx := pos.Order
+		if idx >= len(row) {
+			idx = len(row) - 1
+		}
+		a.selectedNode = row[idx]
+	}
+	if dOrder != 0 {
+		row := a.layout.Layers[pos.Layer]
+		idx := pos.Order + dOrder
+		if idx < 0 || idx >= len(row) {
+			return
+		}
+		a.selectedNode = row[idx]
+	}
+}
+
+// ensureSelectedVisible scrolls the viewport so the selected node's row is in
+// view. Best-effort: locates the node's label line in the rendered body.
+func (a *App) ensureSelectedVisible() {
+	if a.selectedNode == "" {
+		return
+	}
+	lines := strings.Split(a.bodyContent(), "\n")
+	target := -1
+	for i, ln := range lines {
+		if strings.Contains(ln, " "+a.selectedNode+" ") {
+			target = i
+			break
+		}
+	}
+	if target < 0 {
+		return
+	}
+	top := a.viewport.YOffset
+	bottom := top + a.viewport.Height - 1
+	switch {
+	case target < top:
+		a.viewport.SetYOffset(target)
+	case target > bottom:
+		a.viewport.SetYOffset(target - a.viewport.Height + 1)
+	}
 }
 
 // resize sizes the viewport to the window minus the footer keybar.
@@ -288,6 +357,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.run = m.run
 			a.graph = graph.Build(m.run)
 			a.layout = graph.Layout(a.graph)
+			a.selectedNode = firstNode(a.layout)
 			a.mode = modeGraph
 		} else if a.hasList {
 			a.mode = modeList // stay usable: drop back to the list on error
@@ -300,13 +370,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := a.handleKey(m)
 		a = model.(App)
 		a.refresh()
-		// In graph mode there is no node cursor yet, so nav keys scroll the
-		// viewport (selection arrives in a later item).
-		var vpCmd tea.Cmd
+		// Graph nav keys move the node cursor; keep it in view. Free scrolling
+		// is still available via the mouse wheel.
 		if a.mode == modeGraph {
-			a.viewport, vpCmd = a.viewport.Update(m)
+			a.ensureSelectedVisible()
 		}
-		return a, tea.Batch(cmd, vpCmd)
+		return a, cmd
 	}
 	return a, nil
 }
@@ -340,13 +409,22 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case modeGraph:
-		if key.Matches(k, a.keys.Back) {
+		switch {
+		case key.Matches(k, a.keys.Back):
 			if a.hasList {
 				a.err = nil
 				a.mode = modeList
 				return a, nil
 			}
 			return a, tea.Quit
+		case key.Matches(k, a.keys.Up):
+			a.moveSelection(-1, 0)
+		case key.Matches(k, a.keys.Down):
+			a.moveSelection(1, 0)
+		case key.Matches(k, a.keys.Left):
+			a.moveSelection(0, -1)
+		case key.Matches(k, a.keys.Right):
+			a.moveSelection(0, 1)
 		}
 	}
 	return a, nil

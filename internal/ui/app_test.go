@@ -81,3 +81,34 @@ func TestMouseClickSelectsRow(t *testing.T) {
 		t.Errorf("wheel changed selection to %d, want 2", a.selected)
 	}
 }
+
+func TestGraphSelectionNav(t *testing.T) {
+	a := NewApp(nil, AppConfig{})
+	m, _ := a.Update(runOpenedMsg{run: loadRun(t, "run_succeeded.json")})
+	a = m.(App)
+	m, _ = a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	a = m.(App)
+
+	send := func(s string) {
+		m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)})
+		a = m.(App)
+	}
+
+	// Layout layer 0 (sorted) is [code, go, ~base-image]; layer 1 is
+	// [deps, ~base-config].
+	if a.selectedNode != "code" {
+		t.Fatalf("initial selection = %q, want code", a.selectedNode)
+	}
+	send("j") // down a layer
+	if a.selectedNode != "deps" {
+		t.Errorf("after down = %q, want deps", a.selectedNode)
+	}
+	send("k") // up a layer
+	if a.selectedNode != "code" {
+		t.Errorf("after up = %q, want code", a.selectedNode)
+	}
+	send("l") // right within layer
+	if a.selectedNode != "go" {
+		t.Errorf("after right = %q, want go", a.selectedNode)
+	}
+}
