@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -62,24 +63,34 @@ func run(opts options) error {
 		fmt.Printf("rwxtui %s (commit %s, built %s)\n", version, commit, date)
 		return nil
 	}
-	if opts.run == "" {
-		return fmt.Errorf("a run ID is required for now: pass --run <id> " +
-			"(branch resolution via `rwx runs list` is the next step)")
-	}
 
 	client := rwx.NewClient()
-	r, err := client.Results(context.Background(), opts.run)
+	filter := rwx.ListFilter{Limit: 30, Branch: opts.branch}
+
+	// Headless render: one-shot fetch + print, no TUI loop.
+	if opts.print {
+		return printOnce(client, opts, filter)
+	}
+
+	app := ui.NewApp(client, ui.AppConfig{Run: opts.run, Filter: filter})
+	_, err := tea.NewProgram(app, tea.WithAltScreen()).Run()
+	return err
+}
+
+func printOnce(client *rwx.Client, opts options, filter rwx.ListFilter) error {
+	ctx := context.Background()
+	if opts.run != "" {
+		r, err := client.Results(ctx, opts.run)
+		if err != nil {
+			return err
+		}
+		fmt.Print(ui.NewModel(r).View())
+		return nil
+	}
+	rl, err := client.ListRuns(ctx, filter)
 	if err != nil {
 		return err
 	}
-
-	model := ui.NewModel(r)
-
-	if opts.print {
-		fmt.Print(model.View())
-		return nil
-	}
-
-	_, err = tea.NewProgram(model, tea.WithAltScreen()).Run()
-	return err
+	fmt.Print(ui.HomeView(rl.Runs, 0, time.Now()))
+	return nil
 }
