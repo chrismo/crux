@@ -376,7 +376,7 @@ and macOS notifications.
   fixture tests. `RenderOpts` gains `Focus` (dim non-members via `theme.Muted`)
   and a live `/` `textinput` filter predicate on node key. The `f`-isolate half
   needs selection (item 2); the `/` filter does not.
-- [ ] 2. **Node selection + scroll** — add `selectedNode` to `App`; nav keys move
+- [x] 2. **Node selection + scroll** — add `selectedNode` to `App`; nav keys move
   a cursor over `LayoutData.Layers`/`Pos`; `RenderOpts.Selected` highlights it
   (`theme.Selected`); scroll the viewport to keep it visible. **Prereq for items
   1(`f`) and 3.**
