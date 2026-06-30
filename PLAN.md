@@ -291,3 +291,37 @@ Work happens in `/Users/chrismo/modev/rwx-tui`.
 - Standalone personal repo (`chrismo/rwxtui`), kept org-agnostic so it could
   later be pointed at any RWX org or open-sourced.
 ```
+
+## Autonomous session backlog (bounded "how far")
+
+Scope for an unattended `/goal` run: take the interactive tool to
+feature-complete, in order. **Out of scope this run** (deliberate follow-ups, do
+not start them): local storage (JSON/SuperDB), release / cross-compile (`dist`,
+`.rwx/release.yml`), and macOS notifications.
+
+**Definition of Done — applies to every item below:**
+1. Pure logic written test-first (red → green).
+2. `./build.sh ci` passes (vet + test + build) — paste the summary.
+3. Feature demonstrated via `./bin/rwxtui … --print` output where it is visible.
+4. Dogfood CI green: `rwx run .rwx/ci.yml --wait` → `succeeded` — paste the status.
+5. Committed and pushed to `main` — paste the new commit sha.
+6. Item checked off in this list.
+
+**Backlog (in order):**
+- [ ] 1. **Focus/filter** (the 4th graph win) — `internal/graph/focus.go`:
+  ancestor+descendant subgraph of a node, with fixture tests. UI: `/` filters
+  task keys live; `f` isolates the selected node's subgraph and dims the rest.
+- [ ] 2. **Interactive graph viewport** — node selection (move a cursor across
+  nodes with arrows/hjkl) and scroll/pan when the graph exceeds the terminal;
+  selection is what `f` and the detail pane act on.
+- [ ] 3. **Detail pane + logs** — `enter` on the selected node opens a pane
+  (status, cache info, timing, `Messages`/`ResultPrompt`); a key downloads logs
+  via `rwx logs <id> --task <key>`.
+- [ ] 4. **Run-list polish** — scroll + pagination (`NextCursor`) on the home
+  list, and `b`/`a`/`m` filter toggles (branch / all / mine).
+- [ ] 5. **Live poller** — snapshot-poll `results --json` on an interval while a
+  run is in-flight; update the open graph and refresh the list. Back off as the
+  run nears completion; stop when `Completed`.
+
+**Stop:** if an item is genuinely blocked, or at the turn cap, stop and summarize
+what is done and what remains, with the checklist state.
