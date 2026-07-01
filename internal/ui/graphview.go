@@ -3,6 +3,7 @@ package ui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -40,8 +41,12 @@ type RenderOpts struct {
 	Crit      *graph.CritPath    // critical path: thick border (may be nil)
 	Failure   *graph.FailureInfo // failures + blast radius (may be nil)
 	Selected  string             // selected node key: double border + reverse ("" = none)
+	Pinned    map[string]bool    // pinned anchor nodes: 📌 marker + accent border
 	Collapsed map[[2]string]bool // edges (from,to) that fold away hidden nodes: dashed
 }
+
+// pinMark is the prefix shown on a pinned anchor node so it stands out.
+const pinMark = "📌 "
 
 // Box geometry constants. Boxes are 3 rows tall; gapV rows of routing space sit
 // between layers, and gapH columns between sibling boxes.
@@ -88,7 +93,7 @@ func RenderGraph(g *graph.Graph, l *graph.LayoutData, width int, opts RenderOpts
 	for lv, layer := range l.Layers {
 		x, y := 0, lv*layerStep
 		for i, key := range layer {
-			w := lipgloss.Width(labelFor(nodeByKey[key], inBlast(opts, key))) + 4 // 2 pad + 2 border
+			w := lipgloss.Width(labelFor(nodeByKey[key], inBlast(opts, key), opts.Pinned[key])) + 4 // 2 pad + 2 border
 			geo[key] = nodeBox{x: x, y: y, w: w}
 			x += w
 			if i < len(layer)-1 {
@@ -120,14 +125,18 @@ func inBlast(opts RenderOpts, key string) bool {
 	return opts.Failure != nil && opts.Failure.InBlast(key)
 }
 
-// labelFor is the text inside a node box (glyph, key, timing, blast marker).
-func labelFor(n *graph.Node, onBlast bool) string {
+// labelFor is the text inside a node box (glyph, key, timing, blast marker,
+// and a pin marker when the node is a pinned anchor).
+func labelFor(n *graph.Node, onBlast, pinned bool) string {
 	label := glyphFor(n.State) + " " + n.Key
 	if n.HasTiming && n.DurationSeconds > 0 {
 		label += fmt.Sprintf(" (%ds)", n.DurationSeconds)
 	}
 	if onBlast {
 		label += " ↯"
+	}
+	if pinned {
+		label = pinMark + label
 	}
 	return label
 }
@@ -136,6 +145,7 @@ func drawBox(cv *canvas, n *graph.Node, b nodeBox, opts RenderOpts) {
 	onCrit := opts.Crit != nil && opts.Crit.Contains(n.Key)
 	onBlast := inBlast(opts, n.Key)
 	selected := opts.Selected != "" && n.Key == opts.Selected
+	pinned := opts.Pinned[n.Key]
 
 	bs := roundedBorder
 	switch {
@@ -150,8 +160,12 @@ func drawBox(cv *canvas, n *graph.Node, b nodeBox, opts RenderOpts) {
 	if onBlast {
 		borderColor = theme.Failure.GetForeground()
 	}
-	bst := cellStyle{fg: borderColor, bold: onCrit || selected}
-	lst := cellStyle{fg: fg, bold: onCrit || selected, reverse: selected}
+	if pinned {
+		borderColor = theme.Special.GetForeground() // pins win on border color so they're findable
+	}
+	bold := onCrit || selected || pinned
+	bst := cellStyle{fg: borderColor, bold: bold}
+	lst := cellStyle{fg: fg, bold: bold, reverse: selected}
 
 	x, y, w := b.x, b.y, b.w
 	cv.set(x, y, bs.tl, bst)
@@ -159,7 +173,7 @@ func drawBox(cv *canvas, n *graph.Node, b nodeBox, opts RenderOpts) {
 	cv.set(x+w-1, y, bs.tr, bst)
 
 	cv.set(x, y+1, bs.v, bst)
-	cv.text(x+1, y+1, " "+labelFor(n, onBlast)+" ", lst)
+	cv.text(x+1, y+1, " "+labelFor(n, onBlast, pinned)+" ", lst)
 	cv.set(x+w-1, y+1, bs.v, bst)
 
 	cv.set(x, y+2, bs.bl, bst)
@@ -325,8 +339,13 @@ func filterHeader(ov graphOverlay, visible, total int) string {
 	if ov.Filter != "" {
 		parts = append(parts, "filter: "+ov.Filter)
 	}
-	if ov.Focus != nil {
-		parts = append(parts, "focus")
+	if len(ov.Pinned) > 0 {
+		pins := make([]string, 0, len(ov.Pinned))
+		for k := range ov.Pinned {
+			pins = append(pins, k)
+		}
+		sort.Strings(pins)
+		parts = append(parts, "📌 "+strings.Join(pins, ", "))
 	}
 	head := strings.Join(parts, " · ")
 	if visible == 0 {

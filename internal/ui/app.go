@@ -55,7 +55,8 @@ func (m Model) View() string {
 // Screen. The zero value (used by --print) shows no overlays.
 type graphOverlay struct {
 	Selected string
-	Focus    map[string]bool
+	Focus    map[string]bool // visible cone (union of pinned anchors' cones)
+	Pinned   map[string]bool // the pinned anchors themselves (for the pin marker)
 	Filter   string
 }
 
@@ -103,7 +104,7 @@ func Screen(run rwx.Run, g *graph.Graph, l *graph.LayoutData, width int, ov grap
 	b.WriteString("\n")
 
 	b.WriteString(RenderGraph(rg, rl, width, RenderOpts{
-		Crit: cp, Failure: fi, Selected: ov.Selected, Collapsed: collapsed,
+		Crit: cp, Failure: fi, Selected: ov.Selected, Pinned: ov.Pinned, Collapsed: collapsed,
 	}))
 	b.WriteString("\n")
 	b.WriteString(theme.Faint.Render(Legend()))
@@ -192,11 +193,12 @@ type App struct {
 	run          rwx.Run
 	graph        *graph.Graph
 	layout       *graph.LayoutData
-	selectedNode string          // key of the highlighted graph node
-	xOffset      int             // horizontal pan offset for the graph viewport
-	focus        map[string]bool // f-isolated subgraph (nil = no focus)
-	filtering    bool            // the / filter input is active
+	selectedNode string    // key of the highlighted graph node
+	xOffset      int       // horizontal pan offset for the graph viewport
+	pins         []string  // pinned anchor nodes (LIFO); their focus cones union
+	filtering    bool      // the / filter input is active
 	filterInput  textinput.Model
+	logsLoading  bool   // logs fetch in flight for the open detail pane
 	detailOpen   bool   // detail pane shown for the selected node
 	logsContent  string // fetched logs ("" = show task detail instead)
 
@@ -234,16 +236,15 @@ func (a App) bodyContent() string {
 		return HomeView(a.runs, a.selected, a.now(), FilterLabel(a.cfg.Filter))
 	case modeGraph:
 		if a.detailOpen {
-			if a.logsContent != "" {
+			switch {
+			case a.logsLoading:
+				return a.spinner.View() + " loading logs…"
+			case a.logsContent != "":
 				return a.logsContent
 			}
 			return RenderDetail(a.run.FindTask(a.selectedNode))
 		}
-		return Screen(a.run, a.graph, a.layout, a.width, graphOverlay{
-			Selected: a.selectedNode,
-			Focus:    a.focus,
-			Filter:   a.filterInput.Value(),
-		})
+		return Screen(a.run, a.graph, a.layout, a.width, a.currentOverlay())
 	default:
 		return ""
 	}
@@ -262,10 +263,66 @@ func firstNode(l *graph.LayoutData) string {
 	return l.Layers[0][0]
 }
 
-// currentOverlay describes the active cursor/filter/focus for rendering and
-// for deriving the visible set.
+// currentOverlay describes the active cursor/filter/pins for rendering and for
+// deriving the visible set.
 func (a *App) currentOverlay() graphOverlay {
-	return graphOverlay{Selected: a.selectedNode, Focus: a.focus, Filter: a.filterInput.Value()}
+	return graphOverlay{
+		Selected: a.selectedNode,
+		Focus:    a.focusSet(),
+		Pinned:   a.pinnedSet(),
+		Filter:   a.filterInput.Value(),
+	}
+}
+
+// focusSet is the union of the focus cones of all pinned anchors (nil when
+// nothing is pinned, meaning "no focus constraint"). Accumulating pins widens
+// the visible set to cover several subgraphs at once.
+func (a *App) focusSet() map[string]bool {
+	if len(a.pins) == 0 || a.graph == nil {
+		return nil
+	}
+	set := make(map[string]bool)
+	for _, p := range a.pins {
+		for k := range graph.Focus(a.graph, p) {
+			set[k] = true
+		}
+	}
+	return set
+}
+
+// pinnedSet is the set of pinned anchor keys (for rendering the pin marker).
+func (a *App) pinnedSet() map[string]bool {
+	if len(a.pins) == 0 {
+		return nil
+	}
+	m := make(map[string]bool, len(a.pins))
+	for _, p := range a.pins {
+		m[p] = true
+	}
+	return m
+}
+
+// togglePin adds or removes a node from the pin stack.
+func (a *App) togglePin(key string) {
+	if key == "" {
+		return
+	}
+	for i, p := range a.pins {
+		if p == key {
+			a.pins = append(a.pins[:i], a.pins[i+1:]...)
+			return
+		}
+	}
+	a.pins = append(a.pins, key)
+}
+
+// popPin removes the most recently added pin. Reports whether one was removed.
+func (a *App) popPin() bool {
+	if len(a.pins) == 0 {
+		return false
+	}
+	a.pins = a.pins[:len(a.pins)-1]
+	return true
 }
 
 // activeLayout is the layout the graph is currently drawn with: the collapsed
@@ -514,8 +571,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.refresh()
 		return a, nil
 	case spinner.TickMsg:
-		if a.mode != modeLoading {
-			return a, nil // stop animating once loaded
+		if a.mode != modeLoading && !a.logsLoading {
+			return a, nil // stop animating once loaded / logs fetched
 		}
 		var cmd tea.Cmd
 		a.spinner, cmd = a.spinner.Update(m)
@@ -597,6 +654,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 	case logsLoadedMsg:
+		a.logsLoading = false
 		switch {
 		case m.err != nil:
 			a.logsContent = "error fetching logs: " + m.err.Error()
@@ -695,25 +753,38 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case key.Matches(k, a.keys.Back):
 				a.detailOpen = false
 				a.logsContent = ""
+				a.logsLoading = false
 			case key.Matches(k, a.keys.Logs):
 				if a.selectedNode != "" {
-					return a, fetchLogsCmd(a.client, a.run.RunID, a.selectedNode)
+					a.logsLoading = true
+					a.logsContent = ""
+					return a, tea.Batch(fetchLogsCmd(a.client, a.run.RunID, a.selectedNode), a.spinner.Tick)
 				}
 			}
 			return a, nil
 		}
 		switch {
 		case key.Matches(k, a.keys.Back):
+			// esc backs out of the current visual state without leaving the grid:
+			// pop the last pin, else clear an active filter, else do nothing.
+			switch {
+			case a.popPin():
+				a.clampSelectionToVisible()
+			case a.filterInput.Value() != "":
+				a.filterInput.SetValue("")
+				a.clampSelectionToVisible()
+			}
+		case key.Matches(k, a.keys.ToList):
 			if a.hasList {
 				a.err = nil
 				a.mode = modeList
-				return a, nil
 			}
-			return a, tea.Quit
+			return a, nil
 		case key.Matches(k, a.keys.Enter):
 			if a.selectedNode != "" {
 				a.detailOpen = true
 				a.logsContent = ""
+				a.logsLoading = false
 			}
 		case key.Matches(k, a.keys.Up):
 			a.moveSelection(-1, 0)
@@ -727,12 +798,8 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.filtering = true
 			a.filterInput.Focus()
 			return a, textinput.Blink
-		case key.Matches(k, a.keys.Isolate):
-			if a.focus != nil {
-				a.focus = nil // toggle off
-			} else if a.selectedNode != "" {
-				a.focus = graph.Focus(a.graph, a.selectedNode)
-			}
+		case key.Matches(k, a.keys.Pin):
+			a.togglePin(a.selectedNode)
 			a.clampSelectionToVisible()
 		}
 	}

@@ -97,6 +97,14 @@ func TestGoldenSampleDagFiltered(t *testing.T) {
 	goldenCheck(t, "sample_dag_filter_g.txt", Screen(run, g, graph.Layout(g), 0, graphOverlay{Filter: "g"}))
 }
 
+// Pinning an anchor collapses to its focus cone and marks the anchor with 📌.
+func TestGoldenSampleDagPinned(t *testing.T) {
+	run := loadRun(t, "sample_dag_failed.json")
+	g := graph.Build(run)
+	ov := graphOverlay{Focus: graph.Focus(g, "go-deps"), Pinned: map[string]bool{"go-deps": true}}
+	goldenCheck(t, "sample_dag_pinned.txt", Screen(run, g, graph.Layout(g), 0, ov))
+}
+
 func TestGoldenHome(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "rwx", "testdata", "runs_list.json"))
 	if err != nil {

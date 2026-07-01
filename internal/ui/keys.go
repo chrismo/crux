@@ -11,9 +11,10 @@ type keyMap struct {
 	Right   key.Binding
 	Enter   key.Binding
 	Back    key.Binding
+	ToList  key.Binding
 	Quit    key.Binding
 	Filter  key.Binding
-	Isolate key.Binding
+	Pin     key.Binding
 	Logs    key.Binding
 	Refresh key.Binding
 	Top     key.Binding
@@ -30,11 +31,12 @@ func defaultKeyMap() keyMap {
 		Left:    key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "left")),
 		Right:   key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "right")),
 		Enter:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
-		Back:    key.NewBinding(key.WithKeys("esc", "backspace"), key.WithHelp("esc", "back")),
+		Back:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
+		ToList:  key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "list")),
 		Quit:    key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
-		Filter:  key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter (collapse)")),
-		Isolate: key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "isolate (collapse)")),
-		Logs:    key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "logs")),
+		Filter:  key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+		Pin:     key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "pin")),
+		Logs:    key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "logs")),
 		Refresh: key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
 		Top:     key.NewBinding(key.WithKeys("g", "home"), key.WithHelp("g", "top")),
 		Bottom:  key.NewBinding(key.WithKeys("G", "end"), key.WithHelp("G", "bottom")),
@@ -57,7 +59,7 @@ func (h modeHelp) ShortHelp() []key.Binding {
 	case modeList:
 		return []key.Binding{h.keys.Up, h.keys.Down, h.keys.Enter, h.keys.All, h.keys.Mine, h.keys.Branch, h.keys.Refresh, h.keys.Quit}
 	case modeGraph:
-		return []key.Binding{h.keys.Up, h.keys.Down, h.keys.Left, h.keys.Right, h.keys.Enter, h.keys.Isolate, h.keys.Filter, h.keys.Back, h.keys.Quit}
+		return []key.Binding{h.keys.Up, h.keys.Down, h.keys.Left, h.keys.Right, h.keys.Enter, h.keys.Pin, h.keys.Filter, h.keys.Back, h.keys.ToList, h.keys.Quit}
 	default:
 		return []key.Binding{h.keys.Quit}
 	}

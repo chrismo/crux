@@ -83,13 +83,13 @@ func TestFooterKeybarByMode(t *testing.T) {
 		}
 	}
 	// List-only actions must not leak graph bindings.
-	if strings.Contains(listFooter, "isolate") {
+	if strings.Contains(listFooter, "pin") {
 		t.Errorf("list footer should not show graph bindings:\n%s", listFooter)
 	}
 
 	a.mode = modeGraph
 	graphFooter := a.footerView()
-	for _, want := range []string{"back", "isolate", "filter"} {
+	for _, want := range []string{"back", "pin", "filter", "list"} {
 		if !strings.Contains(graphFooter, want) {
 			t.Errorf("graph footer missing %q:\n%s", want, graphFooter)
 		}
@@ -226,7 +226,7 @@ func openGraph(t *testing.T, fixture string) App {
 	return m.(App)
 }
 
-func TestGraphFocusToggle(t *testing.T) {
+func TestGraphPinToggle(t *testing.T) {
 	a := openGraph(t, "run_failed.json")
 	if a.selectedNode != "code" {
 		t.Fatalf("initial selection = %q, want code", a.selectedNode)
@@ -237,20 +237,62 @@ func TestGraphFocusToggle(t *testing.T) {
 		a = m.(App)
 	}
 
-	press("f") // isolate code's cone
-	if a.focus == nil {
-		t.Fatal("focus not set after f")
+	press("p") // pin code's cone
+	if len(a.pins) != 1 || a.pins[0] != "code" {
+		t.Fatalf("pins = %v, want [code]", a.pins)
 	}
-	if !a.focus["code"] || !a.focus["deps"] {
-		t.Errorf("focus should include code's cone: %v", a.focus)
+	fs := a.focusSet()
+	if !fs["code"] || !fs["deps"] {
+		t.Errorf("focus cone should include code's cone: %v", fs)
 	}
-	if a.focus["go"] {
-		t.Errorf("focus should exclude go (unrelated): %v", a.focus)
+	if fs["go"] {
+		t.Errorf("focus cone should exclude go (unrelated): %v", fs)
 	}
 
-	press("f") // toggle off
-	if a.focus != nil {
-		t.Errorf("focus not cleared on second f: %v", a.focus)
+	press("p") // toggle the same node off (unpin)
+	if len(a.pins) != 0 {
+		t.Errorf("pins not cleared on second p: %v", a.pins)
+	}
+	if a.focusSet() != nil {
+		t.Errorf("focusSet should be nil with no pins")
+	}
+}
+
+// Pins accumulate, and esc pops only the most recent one (not all of them).
+func TestPinsAccumulateAndEscPopsLast(t *testing.T) {
+	a := openGraph(t, "run_failed.json")
+	press := func(s string) {
+		m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)})
+		a = m.(App)
+	}
+	esc := func() {
+		m, _ := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		a = m.(App)
+	}
+
+	press("p")
+	first := a.selectedNode
+	a.moveSelection(1, 0) // move to a different visible node
+	second := a.selectedNode
+	if second == first {
+		t.Fatalf("expected selection to move off %q for a distinct second pin", first)
+	}
+	press("p")
+	if len(a.pins) != 2 {
+		t.Fatalf("expected 2 accumulated pins, got %v", a.pins)
+	}
+
+	esc() // pops only the last pin
+	if len(a.pins) != 1 || a.pins[0] != first {
+		t.Fatalf("esc should pop the last pin, leaving [%s], got %v", first, a.pins)
+	}
+	esc() // pops the remaining pin
+	if len(a.pins) != 0 {
+		t.Fatalf("esc should pop the remaining pin, got %v", a.pins)
+	}
+	esc() // nothing left: must NOT leave the grid
+	if a.mode != modeGraph {
+		t.Errorf("esc with nothing to dismiss should stay in the grid, mode=%v", a.mode)
 	}
 }
 
