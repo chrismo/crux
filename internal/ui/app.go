@@ -852,9 +852,14 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.detailOpen {
 			switch {
 			case key.Matches(k, a.keys.Back):
-				a.detailOpen = false
-				a.logsContent = ""
-				a.logsLoading = false
+				// esc peels one layer: logs -> node detail -> graph.
+				if a.logsContent != "" || a.logsLoading {
+					a.logsContent = ""
+					a.logsLoading = false
+					a.viewport.GotoTop()
+				} else {
+					a.detailOpen = false
+				}
 			case key.Matches(k, a.keys.Logs):
 				if a.selectedNode != "" {
 					a.logsLoading = true

@@ -545,11 +545,21 @@ func TestDetailPaneAndLogs(t *testing.T) {
 		t.Errorf("logs not shown in body:\n%s", a.bodyContent())
 	}
 
-	// esc closes the pane and clears logs.
+	// esc peels one layer: from logs back to the node detail (pane stays open).
 	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	a = m.(App)
-	if a.detailOpen || a.logsContent != "" {
-		t.Errorf("esc should close detail and clear logs (open=%v logs=%q)", a.detailOpen, a.logsContent)
+	if !a.detailOpen || a.logsContent != "" {
+		t.Errorf("esc from logs should return to detail (open=%v logs=%q)", a.detailOpen, a.logsContent)
+	}
+	if !strings.Contains(a.bodyContent(), "status:") {
+		t.Errorf("after esc from logs, detail should show:\n%s", a.bodyContent())
+	}
+
+	// A second esc closes the detail pane back to the graph.
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	a = m.(App)
+	if a.detailOpen {
+		t.Errorf("second esc should close the detail pane")
 	}
 }
 
