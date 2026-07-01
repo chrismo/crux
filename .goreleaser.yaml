@@ -1,0 +1,56 @@
+# GoReleaser config for crux. Cuts a GitHub Release with cross-compiled
+# archives + checksums and updates the Homebrew tap formula on each `vX.Y.Z` tag.
+#
+# Validate:  goreleaser check
+# Dry run:   goreleaser release --snapshot --clean   (no publish)
+version: 2
+
+project_name: crux
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: crux
+    main: ./cmd/crux
+    binary: crux
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .Date }}
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: crux
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  # The GitHub Release is published on the source repo. Rename here if/when the
+  # repo is renamed from rwx-tui to crux.
+  github:
+    owner: chrismo
+    name: rwx-tui
+
+homebrew_casks:
+  - name: crux
+    repository:
+      owner: chrismo
+      name: homebrew-crux
+      # A PAT with push access to chrismo/homebrew-crux (the default
+      # GITHUB_TOKEN can't push to another repo).
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/chrismo/rwx-tui"
+    description: "Local TUI for monitoring RWX runs with a better Flow graph"
+    # Strip the Gatekeeper quarantine xattr so the unsigned binary runs.
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/crux"]
+          end

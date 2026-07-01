@@ -5,7 +5,7 @@
 # Usage:
 #   ./build.sh vet         # go vet ./...
 #   ./build.sh test        # go test ./...
-#   ./build.sh build       # version-stamped host binary -> bin/rwxtui
+#   ./build.sh build       # version-stamped host binary -> bin/crux
 #   ./build.sh ci          # vet + test + build (what RWX runs, end to end)
 #   ./build.sh version     # print the computed version string
 #
@@ -14,8 +14,8 @@
 
 set -eu
 
-PKG=./cmd/rwxtui
-BIN=bin/rwxtui
+PKG=./cmd/crux
+BIN=bin/crux
 
 # Version metadata, injected into package main via -ldflags -X. Falls back to
 # "dev" when git or the .git dir is unavailable (e.g. an RWX clone that does not

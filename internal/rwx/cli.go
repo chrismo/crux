@@ -41,7 +41,7 @@ func (c *Client) Results(ctx context.Context, runID string) (Run, error) {
 // (the CLI writes files rather than printing to stdout) and returns the
 // concatenated .log contents.
 func (c *Client) Logs(ctx context.Context, runID, taskKey string) (string, error) {
-	dir, err := os.MkdirTemp("", "rwxtui-logs-")
+	dir, err := os.MkdirTemp("", "crux-logs-")
 	if err != nil {
 		return "", err
 	}

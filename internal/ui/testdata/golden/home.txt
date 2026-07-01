@@ -1,4 +1,4 @@
-rwxtui · rwx-tui
+crux · rwx-tui
 
 › ✓ succeeded  .rwx/ci.yml    CLI initiated run of .rwx…   21m ago    33s
   ✓ succeeded  .rwx/ci.yml    CLI initiated run of .rwx…   45m ago    32s

@@ -1,4 +1,4 @@
-// Command rwxtui is a local TUI for monitoring RWX runs with a better Flow
+// Command crux is a local TUI for monitoring RWX runs with a better Flow
 // dependency-graph viewer.
 package main
 
@@ -33,7 +33,7 @@ type options struct {
 }
 
 func parseFlags(args []string) (options, error) {
-	fs := flag.NewFlagSet("rwxtui", flag.ContinueOnError)
+	fs := flag.NewFlagSet("crux", flag.ContinueOnError)
 	var o options
 	fs.StringVar(&o.branch, "branch", "", "branch to resolve a run for (default: current git branch)")
 	fs.StringVar(&o.definition, "definition", "", "RWX definition path (required when a branch has multiple)")
@@ -53,14 +53,14 @@ func main() {
 		os.Exit(2)
 	}
 	if err := run(opts); err != nil {
-		fmt.Fprintln(os.Stderr, "rwxtui:", err)
+		fmt.Fprintln(os.Stderr, "crux:", err)
 		os.Exit(1)
 	}
 }
 
 func run(opts options) error {
 	if opts.version {
-		fmt.Printf("rwxtui %s (commit %s, built %s)\n", version, commit, date)
+		fmt.Printf("crux %s (commit %s, built %s)\n", version, commit, date)
 		return nil
 	}
 

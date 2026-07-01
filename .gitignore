@@ -1,8 +1,9 @@
 # Go build output
 /bin/
 /dist/
+/crux
+/cmd/crux/crux
 /rwxtui
-/cmd/rwxtui/rwxtui
 *.test
 *.out
 coverage.*

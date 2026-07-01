@@ -107,7 +107,7 @@ func short(id string) string {
 // label ("" = all), shown in the header so toggles are visible.
 func HomeView(runs []rwx.RunSummary, selected int, now time.Time, filter string) string {
 	var b strings.Builder
-	header := "rwxtui"
+	header := "crux"
 	if len(runs) > 0 && runs[0].RepositoryName != "" {
 		header += " · " + runs[0].RepositoryName
 	}

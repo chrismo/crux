@@ -116,7 +116,7 @@ func TestResizeSizesViewportAndRenders(t *testing.T) {
 		t.Errorf("viewport height = %d, want < 30 and >= 1", a.viewport.Height)
 	}
 	out := a.View()
-	if !strings.Contains(out, "rwxtui") {
+	if !strings.Contains(out, "crux") {
 		t.Errorf("rendered view missing home header:\n%s", out)
 	}
 }
