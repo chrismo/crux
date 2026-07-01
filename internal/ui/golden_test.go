@@ -64,13 +64,37 @@ func loadRun(t *testing.T, fixture string) rwx.Run {
 func TestGoldenScreenSucceeded(t *testing.T) {
 	run := loadRun(t, "run_succeeded.json")
 	g := graph.Build(run)
-	goldenCheck(t, "screen_succeeded.txt", Screen(run, g, graph.Layout(g), graphOverlay{}))
+	goldenCheck(t, "screen_succeeded.txt", Screen(run, g, graph.Layout(g), 0, graphOverlay{}))
 }
 
 func TestGoldenScreenFailed(t *testing.T) {
 	run := loadRun(t, "run_failed.json")
 	g := graph.Build(run)
-	goldenCheck(t, "screen_failed.txt", Screen(run, g, graph.Layout(g), graphOverlay{}))
+	goldenCheck(t, "screen_failed.txt", Screen(run, g, graph.Layout(g), 0, graphOverlay{}))
+}
+
+// The sample-DAG goldens exercise the richly-connected mock build: connectors,
+// critical path, and (in the failed variant) blast radius across many layers.
+func TestGoldenSampleDagSucceeded(t *testing.T) {
+	run := loadRun(t, "sample_dag_succeeded.json")
+	g := graph.Build(run)
+	goldenCheck(t, "sample_dag_succeeded.txt", Screen(run, g, graph.Layout(g), 0, graphOverlay{}))
+}
+
+func TestGoldenSampleDagFailed(t *testing.T) {
+	run := loadRun(t, "sample_dag_failed.json")
+	g := graph.Build(run)
+	goldenCheck(t, "sample_dag_failed.txt", Screen(run, g, graph.Layout(g), 0, graphOverlay{}))
+}
+
+// Filter collapses the graph to matching nodes with path-preserving
+// connectors. "g" keeps a cross-layer slice (go-deps, proto-gen, lint-go,
+// integration, ...) whose intermediate build-* nodes are hidden, so the
+// go-deps/proto-gen -> integration links render as dashed collapsed edges.
+func TestGoldenSampleDagFiltered(t *testing.T) {
+	run := loadRun(t, "sample_dag_failed.json")
+	g := graph.Build(run)
+	goldenCheck(t, "sample_dag_filter_g.txt", Screen(run, g, graph.Layout(g), 0, graphOverlay{Filter: "g"}))
 }
 
 func TestGoldenHome(t *testing.T) {

@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/chrismo/crux/internal/graph"
 	"github.com/chrismo/crux/internal/rwx"
@@ -47,7 +48,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	return Screen(m.run, m.graph, m.layout, graphOverlay{})
+	return Screen(m.run, m.graph, m.layout, 0, graphOverlay{})
 }
 
 // graphOverlay carries the interactive overlays (cursor + focus/filter) into
@@ -61,7 +62,7 @@ type graphOverlay struct {
 // Screen renders the full graph view (header, graph, legend) as a string. Pure,
 // so it backs both View() and the headless --print path; ov is empty for
 // --print, which has no cursor or filter.
-func Screen(run rwx.Run, g *graph.Graph, l *graph.LayoutData, ov graphOverlay) string {
+func Screen(run rwx.Run, g *graph.Graph, l *graph.LayoutData, width int, ov graphOverlay) string {
 	var b strings.Builder
 
 	status := run.ResultStatus
@@ -83,11 +84,26 @@ func Screen(run rwx.Run, g *graph.Graph, l *graph.LayoutData, ov graphOverlay) s
 		b.WriteString(theme.Failure.Render(line))
 		b.WriteString("\n")
 	}
+
+	// Filter/focus collapse the graph to a visible set (rather than dimming);
+	// path-preserving connectors stand in for folded-away chains.
+	rg, rl, collapsed := g, l, map[[2]string]bool(nil)
+	if visible := computeVisible(g, ov); visible != nil {
+		b.WriteString(theme.Special.Render(filterHeader(ov, len(visible), len(g.Nodes))))
+		b.WriteString("\n")
+		if len(visible) == 0 {
+			b.WriteString("\n")
+			b.WriteString(theme.Faint.Render(Legend()))
+			b.WriteString("\n")
+			return b.String()
+		}
+		rg, collapsed = collapseGraph(g, visible)
+		rl = graph.Layout(rg)
+	}
 	b.WriteString("\n")
 
-	b.WriteString(RenderGraph(g, l, RenderOpts{
-		Crit: cp, Failure: fi,
-		Selected: ov.Selected, Focus: ov.Focus, Filter: ov.Filter,
+	b.WriteString(RenderGraph(rg, rl, width, RenderOpts{
+		Crit: cp, Failure: fi, Selected: ov.Selected, Collapsed: collapsed,
 	}))
 	b.WriteString("\n")
 	b.WriteString(theme.Faint.Render(Legend()))
@@ -177,6 +193,7 @@ type App struct {
 	graph        *graph.Graph
 	layout       *graph.LayoutData
 	selectedNode string          // key of the highlighted graph node
+	xOffset      int             // horizontal pan offset for the graph viewport
 	focus        map[string]bool // f-isolated subgraph (nil = no focus)
 	filtering    bool            // the / filter input is active
 	filterInput  textinput.Model
@@ -222,7 +239,7 @@ func (a App) bodyContent() string {
 			}
 			return RenderDetail(a.run.FindTask(a.selectedNode))
 		}
-		return Screen(a.run, a.graph, a.layout, graphOverlay{
+		return Screen(a.run, a.graph, a.layout, a.width, graphOverlay{
 			Selected: a.selectedNode,
 			Focus:    a.focus,
 			Filter:   a.filterInput.Value(),
@@ -245,22 +262,62 @@ func firstNode(l *graph.LayoutData) string {
 	return l.Layers[0][0]
 }
 
-// moveSelection moves the graph cursor by dLayer (rows) and dOrder (columns
-// within a layer), clamped to the layout.
-func (a *App) moveSelection(dLayer, dOrder int) {
-	if a.layout == nil || a.selectedNode == "" {
+// currentOverlay describes the active cursor/filter/focus for rendering and
+// for deriving the visible set.
+func (a *App) currentOverlay() graphOverlay {
+	return graphOverlay{Selected: a.selectedNode, Focus: a.focus, Filter: a.filterInput.Value()}
+}
+
+// activeLayout is the layout the graph is currently drawn with: the collapsed
+// layout when a filter/focus is active, else the full layout. Cursor movement
+// walks this, so the selection only ever lands on a visible node.
+func (a *App) activeLayout() *graph.LayoutData {
+	if a.graph == nil {
+		return a.layout
+	}
+	visible := computeVisible(a.graph, a.currentOverlay())
+	if visible == nil {
+		return a.layout
+	}
+	if len(visible) == 0 {
+		return &graph.LayoutData{}
+	}
+	rg, _ := collapseGraph(a.graph, visible)
+	return graph.Layout(rg)
+}
+
+// clampSelectionToVisible keeps the cursor on a visible node after the
+// filter/focus set changes (a filtered-out selection jumps to the first
+// visible node).
+func (a *App) clampSelectionToVisible() {
+	lay := a.activeLayout()
+	if lay == nil {
 		return
 	}
-	pos, ok := a.layout.Pos[a.selectedNode]
+	if _, ok := lay.Pos[a.selectedNode]; a.selectedNode == "" || !ok {
+		a.selectedNode = firstNode(lay)
+		a.xOffset = 0
+	}
+}
+
+// moveSelection moves the graph cursor by dLayer (rows) and dOrder (columns
+// within a layer), clamped to the currently-visible layout.
+func (a *App) moveSelection(dLayer, dOrder int) {
+	lay := a.activeLayout()
+	if lay == nil || a.selectedNode == "" {
+		return
+	}
+	pos, ok := lay.Pos[a.selectedNode]
 	if !ok {
+		a.selectedNode = firstNode(lay) // selection was hidden; land on a visible node
 		return
 	}
 	if dLayer != 0 {
 		target := pos.Layer + dLayer
-		if target < 0 || target >= len(a.layout.Layers) {
+		if target < 0 || target >= len(lay.Layers) {
 			return
 		}
-		row := a.layout.Layers[target]
+		row := lay.Layers[target]
 		idx := pos.Order
 		if idx >= len(row) {
 			idx = len(row) - 1
@@ -268,7 +325,7 @@ func (a *App) moveSelection(dLayer, dOrder int) {
 		a.selectedNode = row[idx]
 	}
 	if dOrder != 0 {
-		row := a.layout.Layers[pos.Layer]
+		row := lay.Layers[pos.Layer]
 		idx := pos.Order + dOrder
 		if idx < 0 || idx >= len(row) {
 			return
@@ -277,17 +334,18 @@ func (a *App) moveSelection(dLayer, dOrder int) {
 	}
 }
 
-// ensureSelectedVisible scrolls the viewport so the selected node's row is in
-// view. Best-effort: locates the node's label line in the rendered body.
+// ensureSelectedVisible scrolls the viewport so the selected node's box is in
+// view both vertically and horizontally. Best-effort: locates the node's label
+// line and column in the rendered body.
 func (a *App) ensureSelectedVisible() {
 	if a.selectedNode == "" {
 		return
 	}
 	lines := strings.Split(a.bodyContent(), "\n")
-	target := -1
+	target, col := -1, -1
 	for i, ln := range lines {
-		if strings.Contains(ln, " "+a.selectedNode+" ") {
-			target = i
+		if c := nodeColumn(ln, a.selectedNode); c >= 0 {
+			target, col = i, c
 			break
 		}
 	}
@@ -302,6 +360,37 @@ func (a *App) ensureSelectedVisible() {
 	case target > bottom:
 		a.viewport.SetYOffset(target - a.viewport.Height + 1)
 	}
+
+	// Horizontal pan: keep the selected box's leading edge within view. Matters
+	// only for the wide unfiltered graph; the collapsed view usually fits.
+	if a.viewport.Width > 0 && col >= 0 {
+		colRight := col + lipgloss.Width(" "+a.selectedNode+" ")
+		left := a.xOffset
+		right := left + a.viewport.Width - 1
+		switch {
+		case col < left:
+			a.xOffset = col
+		case colRight > right:
+			a.xOffset = colRight - a.viewport.Width + 1
+		}
+		if a.xOffset < 0 {
+			a.xOffset = 0
+		}
+		a.viewport.SetXOffset(a.xOffset)
+	}
+}
+
+// nodeColumn returns the display column at which node key's label begins in a
+// rendered line, or -1 if not present. It strips ANSI styling so the column is
+// measured in visible cells, not bytes.
+func nodeColumn(line, key string) int {
+	plain := ansi.Strip(line)
+	marker := " " + key + " "
+	i := strings.Index(plain, marker)
+	if i < 0 {
+		return -1
+	}
+	return lipgloss.Width(plain[:i+1]) // +1: the box's leading pad space
 }
 
 // resize sizes the viewport to the window minus the footer keybar.
@@ -534,9 +623,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 				var cmd tea.Cmd
 				a.filterInput, cmd = a.filterInput.Update(m)
+				a.clampSelectionToVisible()
 				a.refresh()
+				a.ensureSelectedVisible()
 				return a, cmd
 			}
+			a.clampSelectionToVisible()
 			a.refresh()
 			return a, nil
 		}
@@ -641,6 +733,7 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else if a.selectedNode != "" {
 				a.focus = graph.Focus(a.graph, a.selectedNode)
 			}
+			a.clampSelectionToVisible()
 		}
 	}
 	return a, nil

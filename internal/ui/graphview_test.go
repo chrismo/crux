@@ -26,7 +26,7 @@ func fixtureGraph(t *testing.T) (*graph.Graph, *graph.LayoutData) {
 
 func TestRenderGraphContainsAllNodes(t *testing.T) {
 	g, l := fixtureGraph(t)
-	out := RenderGraph(g, l, RenderOpts{})
+	out := RenderGraph(g, l, 0, RenderOpts{})
 
 	for _, key := range []string{"code", "go", "deps", "vet", "test", "build", "~base-image", "~base-config"} {
 		if !strings.Contains(out, key) {
@@ -37,7 +37,7 @@ func TestRenderGraphContainsAllNodes(t *testing.T) {
 
 func TestRenderGraphOrdersLayersTopDown(t *testing.T) {
 	g, l := fixtureGraph(t)
-	out := RenderGraph(g, l, RenderOpts{})
+	out := RenderGraph(g, l, 0, RenderOpts{})
 
 	// A layer-0 root must render above a layer-2 leaf.
 	iCode := strings.Index(out, "code")
@@ -52,7 +52,7 @@ func TestRenderGraphOrdersLayersTopDown(t *testing.T) {
 
 func TestRenderGraphUsesStateGlyphs(t *testing.T) {
 	g, l := fixtureGraph(t)
-	out := RenderGraph(g, l, RenderOpts{})
+	out := RenderGraph(g, l, 0, RenderOpts{})
 
 	if !strings.Contains(out, glyphFor(rwx.StateRan)) {
 		t.Errorf("expected the 'ran' glyph %q in output", glyphFor(rwx.StateRan))
@@ -68,11 +68,11 @@ func TestRenderGraphMarksCriticalPath(t *testing.T) {
 	cp := graph.CriticalPath(g)
 
 	// Without a critical path, every box uses the rounded border.
-	if strings.Contains(RenderGraph(g, l, RenderOpts{}), "┏") {
+	if strings.Contains(RenderGraph(g, l, 0, RenderOpts{}), "┏") {
 		t.Error("did not expect a thick border without a critical path")
 	}
 	// With one, critical nodes switch to a thick border.
-	if !strings.Contains(RenderGraph(g, l, RenderOpts{Crit: cp}), "┏") {
+	if !strings.Contains(RenderGraph(g, l, 0, RenderOpts{Crit: cp}), "┏") {
 		t.Error("expected a thick border for critical-path nodes")
 	}
 }
@@ -94,7 +94,7 @@ func failedGraph(t *testing.T) (*graph.Graph, *graph.LayoutData) {
 func TestRenderGraphMarksBlastRadius(t *testing.T) {
 	g, l := failedGraph(t)
 	fi := graph.AnalyzeFailures(g)
-	out := RenderGraph(g, l, RenderOpts{Failure: fi})
+	out := RenderGraph(g, l, 0, RenderOpts{Failure: fi})
 
 	if !strings.Contains(out, "↯") {
 		t.Error("expected the blast-radius marker ↯ in a failed run")
