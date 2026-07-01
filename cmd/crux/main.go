@@ -104,7 +104,7 @@ func printOnce(client *rwx.Client, opts options, filter rwx.ListFilter) error {
 		if err != nil {
 			return err
 		}
-		fmt.Print(ui.NewModel(r).View())
+		fmt.Print(ui.NewModel(r, splitPins(opts.pin)).View())
 		return nil
 	}
 	rl, err := client.ListRuns(ctx, filter)

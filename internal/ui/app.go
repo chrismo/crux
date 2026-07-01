@@ -21,18 +21,26 @@ import (
 
 // ---- Graph view (a single run) -------------------------------------------
 
-// Model renders a single run's graph. It is reused by the App router and by the
-// headless --print path.
+// Model renders a single run's graph headlessly (the --print path). It honors
+// pin terms so print stays feature-equivalent to the interactive graph.
 type Model struct {
-	run    rwx.Run
-	graph  *graph.Graph
-	layout *graph.LayoutData
+	run     rwx.Run
+	graph   *graph.Graph
+	layout  *graph.LayoutData
+	overlay graphOverlay
 }
 
-// NewModel builds the graph view from a fetched run.
-func NewModel(run rwx.Run) Model {
+// NewModel builds the headless graph view from a fetched run, pre-pinning any
+// substring terms (nil/empty = the full graph).
+func NewModel(run rwx.Run, pinTerms []string) Model {
 	g := graph.Build(run)
-	return Model{run: run, graph: g, layout: graph.Layout(g)}
+	pins := pinListFor(g, pinTerms)
+	return Model{
+		run:     run,
+		graph:   g,
+		layout:  graph.Layout(g),
+		overlay: graphOverlay{Focus: focusSetOf(g, pins), Pinned: pinnedSetOf(pins)},
+	}
 }
 
 func (m Model) Init() tea.Cmd { return nil }
@@ -48,7 +56,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	return Screen(m.run, m.graph, m.layout, 0, graphOverlay{})
+	return Screen(m.run, m.graph, m.layout, 0, m.overlay)
 }
 
 // graphOverlay carries the interactive overlays (cursor + focus/filter) into
@@ -285,20 +293,20 @@ type pin struct {
 	refine bool
 }
 
-// focusSet combines the pinned anchors' cones per each pin's refine flag (nil
-// when nothing is pinned). Replaying the recorded ops keeps the result stable
-// across renders and correct after an esc pop. The anchors themselves are
-// always kept visible so a pin never vanishes.
-func (a *App) focusSet() map[string]bool {
-	if len(a.pins) == 0 || a.graph == nil {
+// focusSetOf combines pinned anchors' cones per each pin's refine flag (nil when
+// empty). refine=true intersects (narrow), false unions (add). Anchors are
+// always kept visible so a pin never vanishes. Shared by the App and the
+// headless --print path so both render pins identically.
+func focusSetOf(g *graph.Graph, pins []pin) map[string]bool {
+	if len(pins) == 0 || g == nil {
 		return nil
 	}
 	set := make(map[string]bool)
-	for k := range graph.Focus(a.graph, a.pins[0].key) {
+	for k := range graph.Focus(g, pins[0].key) {
 		set[k] = true
 	}
-	for _, p := range a.pins[1:] {
-		cone := graph.Focus(a.graph, p.key)
+	for _, p := range pins[1:] {
+		cone := graph.Focus(g, p.key)
 		if p.refine {
 			for k := range set {
 				if !cone[k] {
@@ -311,23 +319,56 @@ func (a *App) focusSet() map[string]bool {
 			}
 		}
 	}
-	for _, p := range a.pins { // anchors always stay visible
+	for _, p := range pins { // anchors always stay visible
 		set[p.key] = true
 	}
 	return set
 }
 
-// pinnedSet is the set of pinned anchor keys (for rendering the pin marker).
-func (a *App) pinnedSet() map[string]bool {
-	if len(a.pins) == 0 {
+// pinnedSetOf is the set of pinned anchor keys (for rendering the pin marker).
+func pinnedSetOf(pins []pin) map[string]bool {
+	if len(pins) == 0 {
 		return nil
 	}
-	m := make(map[string]bool, len(a.pins))
-	for _, p := range a.pins {
+	m := make(map[string]bool, len(pins))
+	for _, p := range pins {
 		m[p.key] = true
 	}
 	return m
 }
+
+// pinListFor resolves substring terms to an ordered pin list using the adaptive
+// refine/add rule (a match already visible in the running pin view refines;
+// otherwise it adds). Shared by --pin seeding and the print path.
+func pinListFor(g *graph.Graph, terms []string) []pin {
+	if g == nil {
+		return nil
+	}
+	var pins []pin
+	pinned := func(k string) bool {
+		for _, p := range pins {
+			if p.key == k {
+				return true
+			}
+		}
+		return false
+	}
+	for _, term := range terms {
+		lt := strings.ToLower(strings.TrimSpace(term))
+		if lt == "" {
+			continue
+		}
+		for _, n := range g.Nodes {
+			if strings.Contains(strings.ToLower(n.Key), lt) && !pinned(n.Key) {
+				pins = append(pins, pin{key: n.Key, refine: focusSetOf(g, pins)[n.Key]})
+			}
+		}
+	}
+	return pins
+}
+
+func (a *App) focusSet() map[string]bool  { return focusSetOf(a.graph, a.pins) }
+func (a *App) pinnedSet() map[string]bool { return pinnedSetOf(a.pins) }
 
 // togglePin adds or removes a node from the pin stack. A newly-pinned node
 // refines (intersects) when it's already inside the current pin view, and adds
@@ -343,41 +384,19 @@ func (a *App) togglePin(key string) {
 			return
 		}
 	}
-	refine := a.focusSet()[key] // already visible in the pin view → narrow it
-	a.pins = append(a.pins, pin{key: key, refine: refine})
+	a.pins = append(a.pins, pin{key: key, refine: a.focusSet()[key]})
 }
 
-// isPinned reports whether key is currently pinned.
-func (a *App) isPinned(key string) bool {
-	for _, p := range a.pins {
-		if p.key == key {
-			return true
-		}
-	}
-	return false
-}
-
-// seedPins applies AppConfig.Pins once, when the first run opens. Each term is
-// a case-insensitive substring; every node it matches is pinned (via the same
-// adaptive refine/add rule as interactive pinning), so `--pin api` pins every
-// api* node and a critical-path term narrows to that path. Pins persist across
-// later runs, so this only runs once.
+// seedPins applies AppConfig.Pins once, when the first run opens. Each term is a
+// case-insensitive substring; every node it matches is pinned (via the adaptive
+// refine/add rule), so `--pin api` pins every api* node and a critical-path term
+// narrows to that path. Pins persist across later runs, so this runs once.
 func (a *App) seedPins() {
 	if a.pinsSeeded || a.graph == nil {
 		return
 	}
 	a.pinsSeeded = true
-	for _, term := range a.cfg.Pins {
-		lt := strings.ToLower(strings.TrimSpace(term))
-		if lt == "" {
-			continue
-		}
-		for _, n := range a.graph.Nodes {
-			if strings.Contains(strings.ToLower(n.Key), lt) && !a.isPinned(n.Key) {
-				a.togglePin(n.Key)
-			}
-		}
-	}
+	a.pins = append(a.pins, pinListFor(a.graph, a.cfg.Pins)...)
 	a.clampSelectionToVisible()
 }
 

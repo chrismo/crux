@@ -105,6 +105,20 @@ func TestGoldenSampleDagPinned(t *testing.T) {
 	goldenCheck(t, "sample_dag_pinned.txt", Screen(run, g, graph.Layout(g), 0, ov))
 }
 
+// The --print path (NewModel) must render pins identically to the interactive
+// view. These goldens lock it so print can't silently fall behind: they cover
+// the full graph and a multi-match --pin term.
+func TestGoldenPrintFull(t *testing.T) {
+	run := loadRun(t, "sample_dag_failed.json")
+	goldenCheck(t, "print_full.txt", NewModel(run, nil).View())
+}
+
+func TestGoldenPrintPinnedDeps(t *testing.T) {
+	run := loadRun(t, "sample_dag_failed.json")
+	// "deps" matches go-deps, node-deps, py-deps — three pins, three 📌 markers.
+	goldenCheck(t, "print_pin_deps.txt", NewModel(run, []string{"deps"}).View())
+}
+
 func TestGoldenHome(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "rwx", "testdata", "runs_list.json"))
 	if err != nil {
