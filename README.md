@@ -14,13 +14,16 @@ what you actually want to know mid-build.
 brew install chrismo/crux/crux
 ```
 
-It shells out to the [`rwx` CLI](https://www.rwx.com/docs), so you'll need that
-installed and authed:
+It shells out to the [`rwx` CLI](https://www.rwx.com/docs) (**v3.19.0 or
+newer**), so you'll need that installed and authed:
 
 ```sh
 brew install rwx-cloud/tap/rwx
 rwx login
 ```
+
+crux checks the CLI version on startup and tells you if it's too old, so if it
+exits with a version complaint, `brew upgrade rwx-cloud/tap/rwx`.
 
 ## Use
 

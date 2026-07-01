@@ -65,6 +65,9 @@ func run(opts options) error {
 	}
 
 	client := rwx.NewClient()
+	if err := client.CheckVersion(context.Background()); err != nil {
+		return err
+	}
 	filter := rwx.ListFilter{Limit: 30, Branch: opts.branch}
 
 	// Headless render: one-shot fetch + print, no TUI loop.
