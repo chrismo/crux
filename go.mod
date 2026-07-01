@@ -1,4 +1,4 @@
-module github.com/chrismo/rwx-tui
+module github.com/chrismo/crux
 
 go 1.26.4
 

@@ -11,8 +11,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/chrismo/rwx-tui/internal/rwx"
-	"github.com/chrismo/rwx-tui/internal/ui"
+	"github.com/chrismo/crux/internal/rwx"
+	"github.com/chrismo/crux/internal/ui"
 )
 
 // Build metadata, injected at build time via -ldflags -X (see build.sh).

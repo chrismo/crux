@@ -1,4 +1,4 @@
-# RWX CI for rwx-tui — dogfooding: this tool's own build runs on RWX.
+# RWX CI for crux — dogfooding: this tool's own build runs on RWX.
 #
 # Run locally without committing/pushing (RWX patches your working tree):
 #   rwx lint .rwx/ci.yml
@@ -29,7 +29,7 @@ tasks:
   - key: code
     call: git/clone 2.0.8
     with:
-      repository: https://github.com/chrismo/rwx-tui.git
+      repository: https://github.com/chrismo/crux.git
       ref: ${{ init.commit-sha }}
 
   - key: go

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chrismo/rwx-tui/internal/rwx"
+	"github.com/chrismo/crux/internal/rwx"
 )
 
 // runGlyph returns a glyph and color for a run-level status. In-progress runs

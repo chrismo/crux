@@ -31,11 +31,10 @@ checksum:
   name_template: "checksums.txt"
 
 release:
-  # The GitHub Release is published on the source repo. Rename here if/when the
-  # repo is renamed from rwx-tui to crux.
+  # The GitHub Release is published on the source repo.
   github:
     owner: chrismo
-    name: rwx-tui
+    name: crux
 
 homebrew_casks:
   - name: crux
@@ -45,7 +44,7 @@ homebrew_casks:
       # A PAT with push access to chrismo/homebrew-crux (the default
       # GITHUB_TOKEN can't push to another repo).
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: "https://github.com/chrismo/rwx-tui"
+    homepage: "https://github.com/chrismo/crux"
     description: "Local TUI for monitoring RWX runs with a better Flow graph"
     # Strip the Gatekeeper quarantine xattr so the unsigned binary runs.
     hooks:

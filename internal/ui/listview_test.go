@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chrismo/rwx-tui/internal/rwx"
+	"github.com/chrismo/crux/internal/rwx"
 )
 
 func loadRunList(t *testing.T) []rwx.RunSummary {

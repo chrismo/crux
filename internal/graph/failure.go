@@ -3,7 +3,7 @@ package graph
 import (
 	"sort"
 
-	"github.com/chrismo/rwx-tui/internal/rwx"
+	"github.com/chrismo/crux/internal/rwx"
 )
 
 // FailureInfo describes the failures in a run and their downstream blast radius.

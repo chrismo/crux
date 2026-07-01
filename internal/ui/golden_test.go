@@ -11,8 +11,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
-	"github.com/chrismo/rwx-tui/internal/graph"
-	"github.com/chrismo/rwx-tui/internal/rwx"
+	"github.com/chrismo/crux/internal/graph"
+	"github.com/chrismo/crux/internal/rwx"
 )
 
 var updateGolden = flag.Bool("update", false, "update golden files")

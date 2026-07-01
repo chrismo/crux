@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/chrismo/rwx-tui/internal/rwx"
+	"github.com/chrismo/crux/internal/rwx"
 )
 
 func TestParseUse(t *testing.T) {

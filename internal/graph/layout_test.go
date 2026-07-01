@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/chrismo/rwx-tui/internal/rwx"
+	"github.com/chrismo/crux/internal/rwx"
 )
 
 func loadFixtureGraph(t *testing.T) *Graph {

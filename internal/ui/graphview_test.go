@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chrismo/rwx-tui/internal/graph"
-	"github.com/chrismo/rwx-tui/internal/rwx"
+	"github.com/chrismo/crux/internal/graph"
+	"github.com/chrismo/crux/internal/rwx"
 )
 
 func fixtureGraph(t *testing.T) (*graph.Graph, *graph.LayoutData) {

@@ -14,8 +14,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/chrismo/rwx-tui/internal/graph"
-	"github.com/chrismo/rwx-tui/internal/rwx"
+	"github.com/chrismo/crux/internal/graph"
+	"github.com/chrismo/crux/internal/rwx"
 )
 
 // ---- Graph view (a single run) -------------------------------------------

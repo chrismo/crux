@@ -35,7 +35,6 @@ git push origin v0.1.0        # the workflow does the rest
 
 ## Notes
 
-- The GitHub Release is published on `chrismo/rwx-tui` (this repo). If the repo
-  is later renamed to `crux`, update `release.github.name` in `.goreleaser.yaml`.
+- The GitHub Release is published on `chrismo/crux` (this repo).
 - macOS binaries are unsigned; the cask's postflight strips the Gatekeeper
   quarantine attribute so `crux` runs without a prompt.

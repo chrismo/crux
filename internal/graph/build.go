@@ -7,7 +7,7 @@ package graph
 import (
 	"strings"
 
-	"github.com/chrismo/rwx-tui/internal/rwx"
+	"github.com/chrismo/crux/internal/rwx"
 )
 
 // Node is a task in the graph.
