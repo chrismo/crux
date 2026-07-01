@@ -1,0 +1,74 @@
+# crux
+
+A little terminal UI for watching [RWX](https://www.rwx.com) runs, with a Flow
+dependency-graph viewer that's trying to be nicer than squinting at the web UI.
+
+It's a brand-new baby binary. It doesn't do all that much yet, and the graph
+rendering is charmingly crude. But it lists your runs, draws the DAG, colors what
+cached vs. ran vs. failed, and points at the critical path — which is most of
+what you actually want to know mid-build.
+
+> The name: the *crux* is the decisive move — the bottleneck, the critical path.
+> Which is the thing this tool exists to surface. (Also: four letters, and it
+> tab-completes without fighting its parent `rwx`.)
+
+## Install
+
+```sh
+brew install chrismo/crux/crux
+```
+
+It shells out to the [`rwx` CLI](https://www.rwx.com/docs), so you'll need that
+installed and authed:
+
+```sh
+brew install rwx-cloud/tap/rwx
+rwx login
+```
+
+## Use
+
+```sh
+crux                  # home: a list of recent runs — pick one, hit enter
+crux --run <run-id>   # jump straight into a run's flow graph
+crux --branch <name>  # filter the list to a branch
+crux --print          # render once to stdout and exit (no TUI; handy for pipes)
+crux --version
+```
+
+Keys — **list:** `↑/↓` move · `enter` open · `a`/`m`/`b` all/mine/branch · `r`
+refresh · `q` quit. **graph:** `↑/↓/←/→` move the cursor · `enter` task detail ·
+`L` logs · `f` isolate a node's subgraph · `/` filter · `esc` back.
+
+What the graph tries to make obvious:
+
+- **cache clarity** — a glyph per task: `✓` ran, `⚡` cache hit, `✗` failed,
+  `⊘` skipped, `●` running, …
+- **critical path** — the heaviest chain, highlighted, with the total time
+- **failure tracing** — the failed task and its downstream blast radius
+- **focus/filter** — isolate a node's ancestors + descendants, or filter by name
+
+In-flight runs live-update on a poll.
+
+## Honest status
+
+Very early. Known rough edges:
+
+- The graph layout is deliberately simple — rows of boxes with `│` cues, no real
+  edge routing. It gets cramped on big, gnarly DAGs, which is exactly where it
+  most needs the work.
+- macOS + Linux, single static binary. It's unsigned, so the Homebrew cask
+  strips the Gatekeeper quarantine on install.
+- The interactive bits are tested by driving the model directly, not a real
+  terminal — expect the occasional papercut. Reports welcome.
+
+## Build from source
+
+```sh
+git clone https://github.com/chrismo/crux
+cd crux
+./build.sh build   # -> bin/crux
+./build.sh ci      # vet + test + build
+```
+
+Releases are cut locally with GoReleaser — see [RELEASING.md](RELEASING.md).
