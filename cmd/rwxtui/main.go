@@ -91,6 +91,6 @@ func printOnce(client *rwx.Client, opts options, filter rwx.ListFilter) error {
 	if err != nil {
 		return err
 	}
-	fmt.Print(ui.HomeView(rl.Runs, 0, time.Now()))
+	fmt.Print(ui.HomeView(rl.Runs, 0, time.Now(), ui.FilterLabel(filter)))
 	return nil
 }

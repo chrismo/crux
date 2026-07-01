@@ -83,5 +83,5 @@ func TestGoldenHome(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	now := time.Date(2026, 6, 30, 21, 0, 0, 0, time.UTC)
-	goldenCheck(t, "home.txt", HomeView(rl.Runs, 0, now))
+	goldenCheck(t, "home.txt", HomeView(rl.Runs, 0, now, ""))
 }

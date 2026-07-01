@@ -71,7 +71,7 @@ func TestPollIntervalBackoff(t *testing.T) {
 }
 
 // The footer keybar is generated from the keymap, so labels can't drift from
-// behavior. Verify the mode-aware short help and the ? full overlay.
+// behavior. It is mode-aware and there is no separate ? overlay.
 func TestFooterKeybarByMode(t *testing.T) {
 	a := NewApp(nil, AppConfig{})
 
@@ -82,18 +82,16 @@ func TestFooterKeybarByMode(t *testing.T) {
 			t.Errorf("list footer missing %q:\n%s", want, listFooter)
 		}
 	}
+	// List-only actions must not leak graph bindings.
+	if strings.Contains(listFooter, "isolate") {
+		t.Errorf("list footer should not show graph bindings:\n%s", listFooter)
+	}
 
 	a.mode = modeGraph
 	graphFooter := a.footerView()
-	if !strings.Contains(graphFooter, "back") {
-		t.Errorf("graph footer missing %q:\n%s", "back", graphFooter)
-	}
-
-	a.showHelp = true
-	full := a.footerView()
-	for _, want := range []string{"refresh", "top", "bottom"} {
-		if !strings.Contains(full, want) {
-			t.Errorf("? overlay missing %q:\n%s", want, full)
+	for _, want := range []string{"back", "isolate", "filter"} {
+		if !strings.Contains(graphFooter, want) {
+			t.Errorf("graph footer missing %q:\n%s", want, graphFooter)
 		}
 	}
 }

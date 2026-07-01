@@ -102,19 +102,35 @@ func short(id string) string {
 	return id
 }
 
-// HomeView renders the run-list landing (header, list, footer). Pure; backs both
-// the App's list mode and the headless --print path.
-func HomeView(runs []rwx.RunSummary, selected int, now time.Time) string {
+// HomeView renders the run-list landing (header, list). Pure; backs both the
+// App's list mode and the headless --print path. filter is the active filter
+// label ("" = all), shown in the header so toggles are visible.
+func HomeView(runs []rwx.RunSummary, selected int, now time.Time, filter string) string {
 	var b strings.Builder
 	header := "rwxtui"
 	if len(runs) > 0 && runs[0].RepositoryName != "" {
 		header += " · " + runs[0].RepositoryName
 	}
 	b.WriteString(theme.Header.Render(header))
+	if filter != "" {
+		b.WriteString("  " + theme.Special.Render("["+filter+"]"))
+	}
 	b.WriteString("\n\n")
 	b.WriteString(RenderRunList(runs, selected, now))
 	b.WriteString("\n")
 	return b.String()
+}
+
+// FilterLabel describes the active list filter for the header ("" = all/default).
+func FilterLabel(f rwx.ListFilter) string {
+	switch {
+	case f.Mine:
+		return "mine"
+	case f.Branch != "":
+		return "branch: " + f.Branch
+	default:
+		return ""
+	}
 }
 
 // ---- App router (list <-> graph) -----------------------------------------
@@ -144,10 +160,9 @@ type App struct {
 	mode    appMode
 	hasList bool // a list exists to return to via esc
 
-	keys     keyMap
-	help     help.Model
-	showHelp bool
-	spinner  spinner.Model
+	keys    keyMap
+	help    help.Model
+	spinner spinner.Model
 
 	width    int
 	height   int
@@ -199,7 +214,7 @@ func NewApp(client *rwx.Client, cfg AppConfig) App {
 func (a App) bodyContent() string {
 	switch a.mode {
 	case modeList:
-		return HomeView(a.runs, a.selected, a.now())
+		return HomeView(a.runs, a.selected, a.now(), FilterLabel(a.cfg.Filter))
 	case modeGraph:
 		if a.detailOpen {
 			if a.logsContent != "" {
@@ -300,9 +315,8 @@ func (a *App) resize() {
 	a.viewport.Height = h
 }
 
-// footerView renders the mode-aware keybar (or the full ? overlay).
+// footerView renders the mode-aware one-line keybar.
 func (a App) footerView() string {
-	a.help.ShowAll = a.showHelp
 	return a.help.View(modeHelp{keys: a.keys, mode: a.mode})
 }
 
@@ -540,13 +554,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Quit and help toggle are global.
-	switch {
-	case key.Matches(k, a.keys.Quit):
+	// Quit is global.
+	if key.Matches(k, a.keys.Quit) {
 		return a, tea.Quit
-	case key.Matches(k, a.keys.Help):
-		a.showHelp = !a.showHelp
-		return a, nil
 	}
 
 	switch a.mode {
