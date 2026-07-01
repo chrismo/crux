@@ -433,6 +433,43 @@ func TestPinThenUnpinRestoresFilter(t *testing.T) {
 	}
 }
 
+// Unpinning one of several pins must NOT restore a stashed filter — doing so
+// would override the surviving pins (filter is a global finder). Only unpinning
+// the last pin restores the filter.
+func TestUnpinWithOtherPinsKeepsView(t *testing.T) {
+	a := openGraph(t, "sample_dag_failed.json")
+	press := func(s string) {
+		m, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)})
+		a = m.(App)
+	}
+	space := func() {
+		m, _ := a.Update(tea.KeyMsg{Type: tea.KeySpace})
+		a = m.(App)
+	}
+
+	press("web")     // filter to *-web nodes
+	a.selectedNode = "lint-web"
+	space()          // pin lint-web (filter "web" stashed, view collapses)
+	a.selectedNode = "node-deps"
+	space()          // pin node-deps (a second pin)
+	if len(a.pins) != 2 {
+		t.Fatalf("expected 2 pins, got %v", a.pins)
+	}
+
+	// Unpin lint-web with node-deps still pinned: the filter must NOT come back.
+	a.selectedNode = "lint-web"
+	space()
+	if len(a.pins) != 1 || a.pins[0].key != "node-deps" {
+		t.Fatalf("expected only node-deps pinned, got %v", a.pins)
+	}
+	if a.filterInput.Value() != "" {
+		t.Errorf("unpinning with a pin remaining should not restore the filter, got %q", a.filterInput.Value())
+	}
+	if vis := computeVisible(a.graph, a.currentOverlay()); !vis["node-deps"] {
+		t.Errorf("node-deps should still be visible in its pin view: %v", vis)
+	}
+}
+
 // Pins accumulate, and esc pops only the most recent one (not all of them).
 func TestPinsAccumulateAndEscPopsLast(t *testing.T) {
 	a := openGraph(t, "run_failed.json")

@@ -295,8 +295,9 @@ func (a *App) currentOverlay() graphOverlay {
 // the view — the nested "hide the siblings" case), false = union (the node was
 // brought in from elsewhere via the global filter, so it adds a second area).
 // The first pin's refine is unused (it's the base). stashedFilter is the filter
-// that was active when this pin was made (cleared on pin); unpinning restores it
-// so pin-then-unpin is a true undo back to the filtered view.
+// that was active when this pin was made (cleared on pin); it's restored only
+// when unpinning empties the stack, so pin-then-unpin is a true undo without
+// clobbering other pins that are still up.
 type pin struct {
 	key           string
 	refine        bool
@@ -381,23 +382,27 @@ func (a *App) focusSet() map[string]bool  { return focusSetOf(a.graph, a.pins) }
 func (a *App) pinnedSet() map[string]bool { return pinnedSetOf(a.pins) }
 
 // togglePin adds or removes a node from the pin stack and returns the filter to
-// display afterwards. Adding stashes the current filter (passed in) on the pin
-// and returns "" — the caller clears the filter to snap to the pin view. Removing
-// returns the pin's stashed filter so unpinning restores the prior filtered view.
-// A newly-pinned node refines (intersects) when it's already inside the current
-// pin view, and adds (unions) when it isn't.
-func (a *App) togglePin(key, stash string) (restore string) {
+// display afterwards (the caller applies it). Adding stashes the current filter
+// on the pin and returns "" — the filter clears to snap to the pin view. Removing
+// the LAST pin restores that pin's stashed filter, so pin-then-unpin is a true
+// undo back to the filtered view; removing a pin while others remain keeps the
+// current view (curFilter) so it can't override the surviving pins. A newly-
+// pinned node refines (intersects) when already inside the pin view, else adds.
+func (a *App) togglePin(key, curFilter string) (newFilter string) {
 	if key == "" {
-		return ""
+		return curFilter
 	}
 	for i, p := range a.pins {
 		if p.key == key {
-			restore = p.stashedFilter
+			stashed := p.stashedFilter
 			a.pins = append(a.pins[:i], a.pins[i+1:]...)
-			return restore
+			if len(a.pins) == 0 {
+				return stashed // undo back to the filter you started from
+			}
+			return curFilter // other pins remain: don't disturb their view
 		}
 	}
-	a.pins = append(a.pins, pin{key: key, refine: a.focusSet()[key], stashedFilter: stash})
+	a.pins = append(a.pins, pin{key: key, refine: a.focusSet()[key], stashedFilter: curFilter})
 	return ""
 }
 
