@@ -24,18 +24,21 @@ git push -u origin main
 ## Cut a release
 
 ```sh
-# pre-flight: validate + full local build, no publish
-goreleaser check
-goreleaser release --snapshot --clean
-
-# real release
-git tag v0.1.0
-git push origin v0.1.0
-GITHUB_TOKEN=$(gh auth token) goreleaser release --clean
+./build.sh snapshot          # optional pre-flight: build all platforms, no publish
+./build.sh release v0.1.0    # validate + test, then tag, push, and publish
 ```
 
-The last command publishes the GitHub Release and updates the tap. Then
+`release` refuses to run on a dirty tree or an existing tag, runs
+`goreleaser check` + vet + tests before tagging, then publishes the GitHub
+Release and updates the tap using your `gh` token. Afterward:
 `brew install chrismo/crux/crux` (or `brew upgrade crux`).
+
+Equivalent raw commands, if you'd rather not use the script:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+GITHUB_TOKEN=$(gh auth token) goreleaser release --clean
+```
 
 ## Notes
 
