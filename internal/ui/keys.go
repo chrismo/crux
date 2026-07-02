@@ -40,11 +40,22 @@ func defaultKeyMap() keyMap {
 // always-visible one-line keybar to the current mode. (There is no separate ?
 // overlay — the keybar shows everything that applies.)
 type modeHelp struct {
-	keys keyMap
-	mode appMode
+	keys   keyMap
+	mode   appMode
+	detail bool // graph detail/log pane open (a sub-state of modeGraph)
 }
 
 func (h modeHelp) ShortHelp() []key.Binding {
+	// The graph detail/log pane only scrolls and peels back — none of the graph
+	// nav/filter/pin/list keys apply, so it gets its own keybar.
+	if h.mode == modeGraph && h.detail {
+		return []key.Binding{
+			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", "scroll")),
+			h.keys.Logs,
+			h.keys.Back,
+			key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("^C", "quit")),
+		}
+	}
 	switch h.mode {
 	case modeList:
 		// Type-to-filter like the graph; Tab cycles the server-side fetch scope.

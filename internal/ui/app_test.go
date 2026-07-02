@@ -96,6 +96,21 @@ func TestFooterKeybarByMode(t *testing.T) {
 			t.Errorf("graph footer missing %q:\n%s", want, graphFooter)
 		}
 	}
+
+	// The detail/log pane has its own keybar: scroll/logs/back only. It must not
+	// advertise graph actions that do nothing there (list, pin, filter).
+	a.detailOpen = true
+	detailFooter := a.footerView()
+	for _, want := range []string{"scroll", "logs", "back"} {
+		if !strings.Contains(detailFooter, want) {
+			t.Errorf("detail footer missing %q:\n%s", want, detailFooter)
+		}
+	}
+	for _, unwanted := range []string{"list", "pin", "filter"} {
+		if strings.Contains(detailFooter, unwanted) {
+			t.Errorf("detail footer should not show %q:\n%s", unwanted, detailFooter)
+		}
+	}
 }
 
 func TestResizeSizesViewportAndRenders(t *testing.T) {

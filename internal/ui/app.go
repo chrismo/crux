@@ -588,7 +588,7 @@ func (a *App) resize() {
 
 // footerView renders the mode-aware one-line keybar.
 func (a App) footerView() string {
-	return a.help.View(modeHelp{keys: a.keys, mode: a.mode})
+	return a.help.View(modeHelp{keys: a.keys, mode: a.mode, detail: a.detailOpen})
 }
 
 type runsLoadedMsg struct {
