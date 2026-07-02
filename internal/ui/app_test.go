@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/chrismo/crux/internal/graph"
@@ -308,7 +307,7 @@ func TestGraphPinToggle(t *testing.T) {
 func TestPinsIntersect(t *testing.T) {
 	run := loadRun(t, "sample_dag_failed.json")
 	g := graph.Build(run)
-	a := &App{graph: g, layout: graph.Layout(g), filterInput: textinput.New()}
+	a := &App{graph: g, layout: graph.Layout(g)}
 
 	// integration has three parents: build-api, build-worker, build-web.
 	a.togglePin("integration")
@@ -339,7 +338,7 @@ func TestPinsIntersect(t *testing.T) {
 func TestPinsUnionWhenAddedFromElsewhere(t *testing.T) {
 	run := loadRun(t, "sample_dag_failed.json")
 	g := graph.Build(run)
-	a := &App{graph: g, layout: graph.Layout(g), filterInput: textinput.New()}
+	a := &App{graph: g, layout: graph.Layout(g)}
 
 	a.togglePin("go-deps") // Go branch
 	if a.focusSet()["node-deps"] {
@@ -362,7 +361,7 @@ func TestFilterFindsOutsidePinsThenPinClearsIt(t *testing.T) {
 	a.togglePin("go-deps") // pin the Go branch
 
 	// node-deps is outside go-deps' cone; the global filter still finds it.
-	a.filterInput.SetValue("node-deps")
+	a.graphFilter = "node-deps"
 	vis := computeVisible(a.graph, a.currentOverlay())
 	if !vis["node-deps"] {
 		t.Fatalf("active filter should find node-deps globally: %v", vis)
@@ -372,8 +371,8 @@ func TestFilterFindsOutsidePinsThenPinClearsIt(t *testing.T) {
 	a.selectedNode = "node-deps"
 	m, _ := a.Update(tea.KeyMsg{Type: tea.KeySpace})
 	a = m.(App)
-	if a.filterInput.Value() != "" {
-		t.Errorf("pinning should clear the filter, got %q", a.filterInput.Value())
+	if a.graphFilter != "" {
+		t.Errorf("pinning should clear the filter, got %q", a.graphFilter)
 	}
 	fs := a.focusSet()
 	if !fs["go-deps"] || !fs["node-deps"] {
@@ -457,21 +456,21 @@ func TestEscUndoesPinAndRestoresFilter(t *testing.T) {
 	a := openGraph(t, "sample_dag_failed.json")
 
 	pressRunes(&a, "build")
-	if a.filterInput.Value() != "build" {
-		t.Fatalf("filter = %q, want build", a.filterInput.Value())
+	if a.graphFilter != "build" {
+		t.Fatalf("filter = %q, want build", a.graphFilter)
 	}
 
 	sendType(&a, tea.KeySpace) // pin; filter clears to the pin view
-	if len(a.pins) != 1 || a.filterInput.Value() != "" {
-		t.Fatalf("after pin: pins=%v filter=%q", a.pins, a.filterInput.Value())
+	if len(a.pins) != 1 || a.graphFilter != "" {
+		t.Fatalf("after pin: pins=%v filter=%q", a.pins, a.graphFilter)
 	}
 
 	sendType(&a, tea.KeyEsc) // undo the pin
 	if len(a.pins) != 0 {
 		t.Fatalf("esc should undo the pin, pins=%v", a.pins)
 	}
-	if a.filterInput.Value() != "build" {
-		t.Errorf("esc should restore the filter, got %q", a.filterInput.Value())
+	if a.graphFilter != "build" {
+		t.Errorf("esc should restore the filter, got %q", a.graphFilter)
 	}
 }
 
@@ -496,8 +495,8 @@ func TestUnpinWithOtherPinsKeepsView(t *testing.T) {
 	if len(a.pins) != 1 || a.pins[0].key != "node-deps" {
 		t.Fatalf("expected only node-deps pinned, got %v", a.pins)
 	}
-	if a.filterInput.Value() != "" {
-		t.Errorf("unpin must not resurrect a filter, got %q", a.filterInput.Value())
+	if a.graphFilter != "" {
+		t.Errorf("unpin must not resurrect a filter, got %q", a.graphFilter)
 	}
 	if vis := computeVisible(a.graph, a.currentOverlay()); !vis["node-deps"] {
 		t.Errorf("node-deps should still be visible in its pin view: %v", vis)
@@ -512,13 +511,13 @@ func TestEscCancelsLiveFilterBeforeHistory(t *testing.T) {
 	a.selectedNode = "go-deps"
 	sendType(&a, tea.KeySpace) // pin go-deps (history has the pre-pin snapshot)
 	pressRunes(&a, "web")      // start a new finder search
-	if a.filterInput.Value() != "web" {
-		t.Fatalf("filter = %q, want web", a.filterInput.Value())
+	if a.graphFilter != "web" {
+		t.Fatalf("filter = %q, want web", a.graphFilter)
 	}
 
 	sendType(&a, tea.KeyEsc) // cancels the live filter, leaves the pin
-	if a.filterInput.Value() != "" {
-		t.Errorf("first esc should clear the live filter, got %q", a.filterInput.Value())
+	if a.graphFilter != "" {
+		t.Errorf("first esc should clear the live filter, got %q", a.graphFilter)
 	}
 	if len(a.pins) != 1 {
 		t.Fatalf("first esc should not touch pins, got %v", a.pins)
@@ -636,21 +635,21 @@ func TestGraphFilterTyping(t *testing.T) {
 	press("v")
 	press("e")
 	press("t")
-	if got := a.filterInput.Value(); got != "vet" {
+	if got := a.graphFilter; got != "vet" {
 		t.Errorf("filter value = %q, want vet", got)
 	}
 
 	// backspace deletes the last character.
 	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 	a = m.(App)
-	if got := a.filterInput.Value(); got != "ve" {
+	if got := a.graphFilter; got != "ve" {
 		t.Errorf("backspace should delete last char, got %q", got)
 	}
 
 	// esc clears the filter entirely.
 	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	a = m.(App)
-	if a.filterInput.Value() != "" {
-		t.Errorf("esc should clear the filter, got %q", a.filterInput.Value())
+	if a.graphFilter != "" {
+		t.Errorf("esc should clear the filter, got %q", a.graphFilter)
 	}
 }

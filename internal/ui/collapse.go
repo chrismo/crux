@@ -26,14 +26,8 @@ func computeVisible(g *graph.Graph, ov graphOverlay) map[string]bool {
 		}
 		return vis
 	}
-	if ov.Focus != nil {
-		vis := make(map[string]bool, len(ov.Focus))
-		for k := range ov.Focus {
-			vis[k] = true
-		}
-		return vis
-	}
-	return nil
+	// The pin cone is already a read-only set the callers don't mutate.
+	return ov.Focus
 }
 
 // collapseGraph builds a graph over only the visible nodes, preserving reach/

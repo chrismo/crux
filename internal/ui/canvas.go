@@ -21,10 +21,8 @@ type canvas struct {
 }
 
 type cell struct {
-	r       rune
-	fg      lipgloss.TerminalColor
-	bold    bool
-	reverse bool
+	r rune
+	cellStyle
 }
 
 // cellStyle is the styling applied when writing to the canvas.
@@ -61,7 +59,7 @@ func (c *canvas) set(x, y int, r rune, st cellStyle) int {
 		width = 1
 	}
 	if c.inBounds(x, y) {
-		c.cells[y*c.w+x] = cell{r: r, fg: st.fg, bold: st.bold, reverse: st.reverse}
+		c.cells[y*c.w+x] = cell{r: r, cellStyle: st}
 	}
 	if width == 2 && c.inBounds(x+1, y) {
 		c.cells[y*c.w+x+1] = cell{r: 0} // continuation
@@ -132,20 +130,20 @@ func (c *canvas) String() string {
 			}
 			// Gather a run of same-styled cells.
 			var run strings.Builder
-			fg, bold, rev := cl.fg, cl.bold, cl.reverse
+			st := cl.cellStyle
 			for x <= last {
 				nc := c.cells[y*c.w+x]
 				if nc.r == 0 {
 					x++
 					continue
 				}
-				if nc.fg != fg || nc.bold != bold || nc.reverse != rev {
+				if nc.cellStyle != st {
 					break
 				}
 				run.WriteRune(nc.r)
 				x++
 			}
-			b.WriteString(styleRun(run.String(), fg, bold, rev))
+			b.WriteString(styleRun(run.String(), st))
 		}
 		if y < c.h-1 {
 			b.WriteByte('\n')
@@ -156,18 +154,18 @@ func (c *canvas) String() string {
 
 // styleRun applies a style to a text run, or returns it raw when unstyled (the
 // common case for blank/plain cells), avoiding needless lipgloss wrapping.
-func styleRun(s string, fg lipgloss.TerminalColor, bold, reverse bool) string {
-	if fg == nil && !bold && !reverse {
+func styleRun(s string, cs cellStyle) string {
+	if cs.fg == nil && !cs.bold && !cs.reverse {
 		return s
 	}
 	st := lipgloss.NewStyle()
-	if fg != nil {
-		st = st.Foreground(fg)
+	if cs.fg != nil {
+		st = st.Foreground(cs.fg)
 	}
-	if bold {
+	if cs.bold {
 		st = st.Bold(true)
 	}
-	if reverse {
+	if cs.reverse {
 		st = st.Reverse(true)
 	}
 	return st.Render(s)

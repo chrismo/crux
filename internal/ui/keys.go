@@ -2,37 +2,31 @@ package ui
 
 import "github.com/charmbracelet/bubbles/key"
 
-// keyMap is the single source of truth for key bindings. The footer keybar is
-// generated from it (via bubbles/help), so the labels can't drift from behavior.
+// keyMap holds the key bindings whose help labels the footer keybar renders (via
+// bubbles/help). Movement/typing are matched by raw key type in handleKey and
+// labeled inline in ShortHelp, so only the action keys that appear in the keybar
+// live here.
 type keyMap struct {
-	Up      key.Binding
-	Down    key.Binding
-	Left    key.Binding
-	Right   key.Binding
-	Enter   key.Binding
-	Back    key.Binding
-	ToList  key.Binding
-	Quit    key.Binding
-	Pin     key.Binding
-	Logs    key.Binding
-	Top     key.Binding
-	Bottom  key.Binding
+	Enter  key.Binding
+	Back   key.Binding
+	ToList key.Binding
+	Quit   key.Binding
+	Pin    key.Binding
+	Logs   key.Binding
+	Top    key.Binding
+	Bottom key.Binding
 }
 
 func defaultKeyMap() keyMap {
 	return keyMap{
-		Up:      key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
-		Down:    key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
-		Left:    key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "left")),
-		Right:   key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "right")),
-		Enter:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
-		Back:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
-		ToList:  key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "list")),
-		Quit:    key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
-		Pin:     key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "pin")),
-		Logs:    key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "logs")),
-		Top:     key.NewBinding(key.WithKeys("g", "home"), key.WithHelp("g", "top")),
-		Bottom:  key.NewBinding(key.WithKeys("G", "end"), key.WithHelp("G", "bottom")),
+		Enter:  key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open")),
+		Back:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
+		ToList: key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "list")),
+		Quit:   key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+		Pin:    key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "pin")),
+		Logs:   key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "logs")),
+		Top:    key.NewBinding(key.WithKeys("g", "home"), key.WithHelp("g", "top")),
+		Bottom: key.NewBinding(key.WithKeys("G", "end"), key.WithHelp("G", "bottom")),
 	}
 }
 

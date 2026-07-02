@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -153,10 +152,11 @@ func HomeView(runs []rwx.RunSummary, selected int, now time.Time, scope, filter 
 }
 
 // listStatus is the header suffix describing the two filter tiers: the fetch
-// scope (shown unless "all") and the view filter with a shown/total count.
+// scope (empty for the default "all" scope) and the view filter with a
+// shown/total count.
 func listStatus(scope, filter string, shown, total int) string {
 	var parts []string
-	if scope != "" && scope != "all" {
+	if scope != "" {
 		parts = append(parts, scope)
 	}
 	if filter != "" {
@@ -217,7 +217,7 @@ type App struct {
 	pins         []pin     // pinned anchors (a set); cones combine per pin.refine
 	pinsSeeded   bool      // AppConfig.Pins have been applied (one-time, first run)
 	history      []viewState // focus back-stack: esc pops one snapshot
-	filterInput  textinput.Model // stores the live graph filter string (type-to-filter)
+	graphFilter  string      // live graph filter (type-to-filter); mirrors listFilter
 	logsLoading  bool   // logs fetch in flight for the open detail pane
 	detailOpen   bool   // detail pane shown for the selected node
 	logsContent  string // fetched logs ("" = show task detail instead)
@@ -230,13 +230,9 @@ type App struct {
 func NewApp(client *rwx.Client, cfg AppConfig) App {
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
 	sp.Style = theme.Running
-	ti := textinput.New()
-	ti.Prompt = "filter: "
-	ti.CharLimit = 64
-	ti.SetValue(cfg.GraphFilter) // optional --graph-filter seed
 	return App{
-		filterInput: ti,
-		listFilter:  cfg.ListFilter, // optional --list-filter seed
+		graphFilter: cfg.GraphFilter, // optional --graph-filter seed
+		listFilter:  cfg.ListFilter,  // optional --list-filter seed
 		client:   client,
 		cfg:      cfg,
 		now:      time.Now,
@@ -292,7 +288,7 @@ func (a *App) currentOverlay() graphOverlay {
 		Selected: a.selectedNode,
 		Focus:    a.focusSet(),
 		Pinned:   a.pinnedSet(),
-		Filter:   a.filterInput.Value(),
+		Filter:   a.graphFilter,
 	}
 }
 
@@ -322,7 +318,7 @@ const maxHistory = 50
 // pushHistory records the current focus state before a mutation.
 func (a *App) pushHistory() {
 	a.history = append(a.history, viewState{
-		filter:   a.filterInput.Value(),
+		filter:   a.graphFilter,
 		pins:     append([]pin(nil), a.pins...),
 		selected: a.selectedNode,
 	})
@@ -338,7 +334,7 @@ func (a *App) popHistory() bool {
 	}
 	s := a.history[len(a.history)-1]
 	a.history = a.history[:len(a.history)-1]
-	a.filterInput.SetValue(s.filter)
+	a.graphFilter = s.filter
 	a.pins = s.pins
 	a.selectedNode = s.selected
 	return true
@@ -866,8 +862,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// ctrl+c always quits. Plain "q" quits only in list mode; in the graph it's
-	// a filter character (type-to-filter), so it's handled per mode below.
+	// ctrl+c is the only unconditional quit: everywhere else "q" is a filter
+	// character (type-to-filter), so quitting can't steal it.
 	if k.Type == tea.KeyCtrlC {
 		return a, tea.Quit
 	}
@@ -980,30 +976,30 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// it, then clear the finder filter to commit to the pin view.
 			a.pushHistory()
 			a.togglePin(a.selectedNode)
-			a.filterInput.SetValue("")
+			a.graphFilter = ""
 			a.clampSelectionToVisible()
 		case tea.KeyEsc:
 			// One uniform back-out: cancel the live finder if one's being typed,
 			// otherwise pop the focus history (undo the last pin/unpin, restoring
 			// its filter + cursor). Never leaves the grid.
 			switch {
-			case a.filterInput.Value() != "":
-				a.filterInput.SetValue("")
+			case a.graphFilter != "":
+				a.graphFilter = ""
 				a.clampSelectionToVisible()
 			case a.popHistory():
 				a.clampSelectionToVisible()
 			}
 		case tea.KeyBackspace:
-			if v := a.filterInput.Value(); v != "" {
-				r := []rune(v)
-				a.filterInput.SetValue(string(r[:len(r)-1]))
+			if a.graphFilter != "" {
+				r := []rune(a.graphFilter)
+				a.graphFilter = string(r[:len(r)-1])
 				a.clampSelectionToVisible()
 			} else if a.hasList { // nothing to delete: go back to the run list
 				a.err = nil
 				a.mode = modeList
 			}
 		case tea.KeyRunes:
-			a.filterInput.SetValue(a.filterInput.Value() + string(k.Runes))
+			a.graphFilter += string(k.Runes)
 			a.clampSelectionToVisible()
 		}
 	}

@@ -3,7 +3,6 @@ package ui
 import (
 	"testing"
 
-	"github.com/charmbracelet/bubbles/textinput"
 
 	"github.com/chrismo/crux/internal/graph"
 )
@@ -12,9 +11,9 @@ func fixtureApp(t *testing.T, filter string) *App {
 	t.Helper()
 	run := loadRun(t, "sample_dag_failed.json")
 	g := graph.Build(run)
-	a := &App{graph: g, layout: graph.Layout(g), filterInput: textinput.New()}
+	a := &App{graph: g, layout: graph.Layout(g)}
 	if filter != "" {
-		a.filterInput.SetValue(filter)
+		a.graphFilter = filter
 	}
 	return a
 }
