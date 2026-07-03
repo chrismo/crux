@@ -23,11 +23,16 @@ type RunSummary struct {
 	CompletedRuntimeSeconds *int      `json:"CompletedRuntimeSeconds"`
 }
 
-// RunList is the `rwx runs list --json` payload: a page of runs plus an optional
-// cursor for the next page.
+// RunList is the `rwx runs list --json` payload: a page of runs plus a
+// Pagination object whose NextCursor drives paging (empty = no more pages).
 type RunList struct {
 	Runs       []RunSummary `json:"Runs"`
-	NextCursor string       `json:"NextCursor"`
+	Pagination Pagination   `json:"Pagination"`
+}
+
+// Pagination carries the cursor for fetching the next page.
+type Pagination struct {
+	NextCursor string `json:"NextCursor"`
 }
 
 // ListFilter narrows `rwx runs list`. Zero-value fields are omitted.

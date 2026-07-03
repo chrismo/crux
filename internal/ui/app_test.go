@@ -653,3 +653,56 @@ func TestGraphFilterTyping(t *testing.T) {
 		t.Errorf("esc should clear the filter, got %q", a.graphFilter)
 	}
 }
+
+// nodeColumn locates the box's LEFT BORDER, not the inner text, so panning left
+// keeps the whole box on screen (regression: only the text, not the border, was
+// brought into view).
+func TestNodeColumnReturnsBoxLeftBorder(t *testing.T) {
+	line := "───│ build │" // 3 connector cells, then the box "│ build │"
+	if got := nodeColumn(line, "build"); got != 3 {
+		t.Errorf("nodeColumn = %d, want 3 (the box's left border '│')", got)
+	}
+	if got := nodeColumn(line, "absent"); got != -1 {
+		t.Errorf("nodeColumn(absent) = %d, want -1", got)
+	}
+}
+
+// Opening the detail pane drops the graph's horizontal pan so the narrow detail
+// render isn't left off-screen (regression: it inherited the graph's xOffset).
+func TestOpeningDetailResetsHorizontalScroll(t *testing.T) {
+	a := openGraph(t, "sample_dag_failed.json") // wide graph, window 120x40
+	a.viewport.SetXOffset(60)                   // simulate a far-right pan
+
+	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyEnter}) // open detail on selection
+	a = m.(App)
+	if !a.detailOpen {
+		t.Fatal("enter should open the detail pane")
+	}
+	// With a stale xOffset the viewport cuts the left off; the task key (the
+	// detail header) would be missing.
+	if view := a.viewport.View(); !strings.Contains(view, a.selectedNode) {
+		t.Errorf("detail pane scrolled off — %q not visible:\n%s", a.selectedNode, view)
+	}
+}
+
+// The run list scrolls to keep the selection visible past the initially-shown
+// window (regression: list nav never followed the cursor, so only the top rows
+// that fit were reachable).
+func TestListScrollsToFollowSelection(t *testing.T) {
+	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{Limit: 30}})
+	m, _ := a.Update(runsLoadedMsg{runs: loadRunList(t)})
+	a = m.(App)
+	m, _ = a.Update(tea.WindowSizeMsg{Width: 100, Height: 6}) // only a few rows fit
+	a = m.(App)
+	if a.viewport.YOffset != 0 {
+		t.Fatalf("precondition: YOffset should start at 0, got %d", a.viewport.YOffset)
+	}
+
+	for i := 0; i < len(a.runs)-1; i++ { // move to the last row
+		m, _ = a.Update(tea.KeyMsg{Type: tea.KeyDown})
+		a = m.(App)
+	}
+	if a.viewport.YOffset == 0 {
+		t.Errorf("list did not scroll to follow selection; YOffset still 0 with %d runs in a height-6 viewport", len(a.runs))
+	}
+}

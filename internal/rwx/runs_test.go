@@ -37,6 +37,22 @@ func TestClientListRunsParsesFixture(t *testing.T) {
 	}
 }
 
+// The CLI reports the paging cursor under a Pagination object, not at the top
+// level, so ListRuns must read it from there (else paging never triggers).
+func TestClientListRunsParsesNextCursor(t *testing.T) {
+	data := []byte(`{"Pagination":{"Limit":2,"NextCursor":"abc123"},"Runs":[{"ID":"r1"},{"ID":"r2"}]}`)
+	c := &Client{exec: func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+		return data, nil
+	}}
+	rl, err := c.ListRuns(context.Background(), ListFilter{Limit: 2})
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	if rl.Pagination.NextCursor != "abc123" {
+		t.Errorf("NextCursor = %q, want abc123", rl.Pagination.NextCursor)
+	}
+}
+
 func TestListFilterArgs(t *testing.T) {
 	got := ListFilter{Limit: 20, Branch: "main", Mine: true, ResultStatus: "failed"}.args()
 	want := []string{"runs", "list", "--json", "--limit", "20", "--branch", "main", "--mine", "--result-status", "failed"}

@@ -530,19 +530,14 @@ func (a *App) ensureSelectedVisible() {
 	if target < 0 {
 		return
 	}
-	top := a.viewport.YOffset
-	bottom := top + a.viewport.Height - 1
-	switch {
-	case target < top:
-		a.viewport.SetYOffset(target)
-	case target > bottom:
-		a.viewport.SetYOffset(target - a.viewport.Height + 1)
-	}
+	a.scrollRowIntoView(target)
 
-	// Horizontal pan: keep the selected box's leading edge within view. Matters
-	// only for the wide unfiltered graph; the collapsed view usually fits.
+	// Horizontal pan: keep the whole selected box (left border to right border)
+	// within view. Matters only for the wide unfiltered graph; the collapsed
+	// view usually fits. col is the box's left border; the right border sits one
+	// cell past the "│ key │" span.
 	if a.viewport.Width > 0 && col >= 0 {
-		colRight := col + lipgloss.Width(" "+a.selectedNode+" ")
+		colRight := col + lipgloss.Width(" "+a.selectedNode+" ") + 1
 		left := a.xOffset
 		right := left + a.viewport.Width - 1
 		switch {
@@ -558,9 +553,32 @@ func (a *App) ensureSelectedVisible() {
 	}
 }
 
-// nodeColumn returns the display column at which node key's label begins in a
-// rendered line, or -1 if not present. It strips ANSI styling so the column is
-// measured in visible cells, not bytes.
+// scrollRowIntoView scrolls the viewport vertically the minimum amount to bring
+// the given content line into view.
+func (a *App) scrollRowIntoView(target int) {
+	top := a.viewport.YOffset
+	bottom := top + a.viewport.Height - 1
+	switch {
+	case target < top:
+		a.viewport.SetYOffset(target)
+	case target > bottom:
+		a.viewport.SetYOffset(target - a.viewport.Height + 1)
+	}
+}
+
+// ensureListRowVisible scrolls the run list so the selected row follows the
+// cursor past the initially-visible window. HomeView renders a header line and a
+// blank separator before the rows, so run i lands on content line i+2.
+func (a *App) ensureListRowVisible() {
+	const headerLines = 2
+	a.scrollRowIntoView(headerLines + a.selected)
+}
+
+// nodeColumn returns the display column of the left border of node key's box in
+// a rendered line, or -1 if not present. The box is drawn "│ key │", so the
+// border sits one cell left of the " key " pad span. Panning to this column
+// keeps the whole box (border included) on screen, not just the inner text. It
+// strips ANSI styling so the column is measured in visible cells, not bytes.
 func nodeColumn(line, key string) int {
 	plain := ansi.Strip(line)
 	marker := " " + key + " "
@@ -568,7 +586,11 @@ func nodeColumn(line, key string) int {
 	if i < 0 {
 		return -1
 	}
-	return lipgloss.Width(plain[:i+1]) // +1: the box's leading pad space
+	border := lipgloss.Width(plain[:i]) - 1 // one cell left of the leading pad
+	if border < 0 {
+		border = 0
+	}
+	return border
 }
 
 // resize sizes the viewport to the window minus the footer keybar.
@@ -602,7 +624,7 @@ type runOpenedMsg struct {
 func listRunsCmd(c *rwx.Client, f rwx.ListFilter, appendPage bool) tea.Cmd {
 	return func() tea.Msg {
 		rl, err := c.ListRuns(context.Background(), f)
-		return runsLoadedMsg{runs: rl.Runs, cursor: rl.NextCursor, append: appendPage, err: err}
+		return runsLoadedMsg{runs: rl.Runs, cursor: rl.Pagination.NextCursor, append: appendPage, err: err}
 	}
 }
 
@@ -851,10 +873,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := a.handleKey(m)
 		a = model.(App)
 		a.refresh()
-		// Graph nav keys move the node cursor; keep it in view. Free scrolling
-		// is still available via the mouse wheel.
-		if a.mode == modeGraph && !a.detailOpen {
+		// Keep the cursor in view: graph nav pans to the selected node, list nav
+		// scrolls to the selected row. Free scrolling stays available via the
+		// mouse wheel.
+		switch {
+		case a.mode == modeGraph && !a.detailOpen:
 			a.ensureSelectedVisible()
+		case a.mode == modeList:
+			a.ensureListRowVisible()
 		}
 		return a, cmd
 	}
@@ -970,6 +996,11 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 				a.detailOpen = true
 				a.logsContent = ""
 				a.logsLoading = false
+				// The detail pane is a fresh, narrow render; drop the graph's
+				// horizontal pan (and start at the top) so it isn't scrolled
+				// off-screen. a.xOffset is kept so closing restores the graph pan.
+				a.viewport.SetXOffset(0)
+				a.viewport.GotoTop()
 			}
 		case tea.KeySpace:
 			// Toggle a pin (a forward focus edit). Snapshot first so esc can undo
