@@ -78,7 +78,7 @@ func TestFooterKeybarByMode(t *testing.T) {
 
 	a.mode = modeList
 	listFooter := a.footerView()
-	for _, want := range []string{"move", "filter", "scope", "open", "quit"} {
+	for _, want := range []string{"move", "filter", "scope", "open", "web", "quit"} {
 		if !strings.Contains(listFooter, want) {
 			t.Errorf("list footer missing %q:\n%s", want, listFooter)
 		}
@@ -90,7 +90,7 @@ func TestFooterKeybarByMode(t *testing.T) {
 
 	a.mode = modeGraph
 	graphFooter := a.footerView()
-	for _, want := range []string{"back", "pin", "filter", "list"} {
+	for _, want := range []string{"back", "pin", "filter", "list", "web"} {
 		if !strings.Contains(graphFooter, want) {
 			t.Errorf("graph footer missing %q:\n%s", want, graphFooter)
 		}
@@ -100,7 +100,7 @@ func TestFooterKeybarByMode(t *testing.T) {
 	// advertise graph actions that do nothing there (list, pin, filter).
 	a.detailOpen = true
 	detailFooter := a.footerView()
-	for _, want := range []string{"scroll", "logs", "back"} {
+	for _, want := range []string{"scroll", "logs", "back", "web"} {
 		if !strings.Contains(detailFooter, want) {
 			t.Errorf("detail footer missing %q:\n%s", want, detailFooter)
 		}
@@ -682,6 +682,66 @@ func TestOpeningDetailResetsHorizontalScroll(t *testing.T) {
 	// detail header) would be missing.
 	if view := a.viewport.View(); !strings.Contains(view, a.selectedNode) {
 		t.Errorf("detail pane scrolled off — %q not visible:\n%s", a.selectedNode, view)
+	}
+}
+
+// ctrl+o on a list row opens that run's cloud.rwx.com page.
+func TestCtrlOOpensRunUrlFromList(t *testing.T) {
+	var opened string
+	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{Limit: 30}})
+	a.openURL = func(u string) error { opened = u; return nil }
+	m, _ := a.Update(runsLoadedMsg{runs: loadRunList(t)})
+	a = m.(App)
+
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlO}) // selection defaults to row 0
+	if cmd == nil {
+		t.Fatal("ctrl+o should return a command to open the browser")
+	}
+	cmd() // run the fire-and-forget opener
+	if want := loadRunList(t)[0].RunUrl; opened != want {
+		t.Errorf("opened %q, want %q", opened, want)
+	}
+}
+
+// Opening a run from the list carries its RunUrl so ctrl+o works in the graph
+// too (the rwx results payload has no URL of its own).
+func TestOpeningRunFromListCarriesRunUrl(t *testing.T) {
+	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{Limit: 30}})
+	m, _ := a.Update(runsLoadedMsg{runs: loadRunList(t)})
+	a = m.(App)
+
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyEnter}) // open row 0
+	a = m.(App)
+	if want := loadRunList(t)[0].RunUrl; a.runUrl != want {
+		t.Errorf("runUrl = %q, want %q", a.runUrl, want)
+	}
+}
+
+// In the graph, ctrl+o opens the carried run URL.
+func TestCtrlOOpensRunUrlFromGraph(t *testing.T) {
+	var opened string
+	a := openGraph(t, "sample_dag_failed.json")
+	a.openURL = func(u string) error { opened = u; return nil }
+	a.runUrl = "https://cloud.rwx.com/mint/clabs/runs/abc"
+
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	if cmd == nil {
+		t.Fatal("ctrl+o should open the browser in graph mode")
+	}
+	cmd()
+	if opened != a.runUrl {
+		t.Errorf("graph ctrl+o opened %q, want %q", opened, a.runUrl)
+	}
+}
+
+// ctrl+o is a no-op (no command) when there's no URL to open.
+func TestCtrlONoopWithoutUrl(t *testing.T) {
+	a := openGraph(t, "sample_dag_failed.json") // opened via runOpenedMsg: no runUrl carried
+	if a.runUrl != "" {
+		t.Fatalf("precondition: runUrl should be empty, got %q", a.runUrl)
+	}
+	if _, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlO}); cmd != nil {
+		t.Error("ctrl+o with no URL should not return a command")
 	}
 }
 

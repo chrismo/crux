@@ -47,6 +47,7 @@ func (h modeHelp) ShortHelp() []key.Binding {
 			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", "scroll")),
 			h.keys.Logs,
 			h.keys.Back,
+			key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("^o", "web")),
 			key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("^C", "quit")),
 		}
 	}
@@ -58,6 +59,7 @@ func (h modeHelp) ShortHelp() []key.Binding {
 			key.NewBinding(key.WithKeys("runes"), key.WithHelp("type", "filter")),
 			key.NewBinding(key.WithKeys("tab"), key.WithHelp("⇥", "scope")),
 			h.keys.Enter,
+			key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("^o", "web")),
 			key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("^R", "refresh")),
 			key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("^C", "quit")),
 		}
@@ -71,6 +73,7 @@ func (h modeHelp) ShortHelp() []key.Binding {
 			h.keys.Enter,
 			h.keys.Back,
 			h.keys.ToList,
+			key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("^o", "web")),
 			key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("^C", "quit")),
 		}
 	default:

@@ -3,6 +3,8 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -220,6 +222,7 @@ type App struct {
 	loadingMore bool
 
 	run          rwx.Run
+	runUrl       string    // cloud.rwx.com URL of the open run, carried from the list (ctrl+o)
 	graph        *graph.Graph
 	layout       *graph.LayoutData
 	selectedNode string    // key of the highlighted graph node
@@ -231,6 +234,8 @@ type App struct {
 	logsLoading  bool   // logs fetch in flight for the open detail pane
 	detailOpen   bool   // detail pane shown for the selected node
 	logsContent  string // fetched logs ("" = show task detail instead)
+
+	openURL func(string) error // opens a URL in the browser (injected for tests)
 
 	err error
 }
@@ -244,6 +249,7 @@ func NewApp(client *rwx.Client, cfg AppConfig) App {
 		graphFilter: cfg.GraphFilter,      // optional --graph-filter seed
 		listFilter:  cfg.ListFilter,       // optional --list-filter seed
 		defFilter:   cfg.DefinitionFilter, // optional --definition scope
+		openURL:     openInBrowser,
 		client:   client,
 		cfg:      cfg,
 		now:      time.Now,
@@ -658,6 +664,29 @@ func openRunCmd(c *rwx.Client, id string) tea.Cmd {
 	}
 }
 
+// openInBrowser launches url in the OS default browser (macOS `open`, else
+// `xdg-open`). Fire-and-forget: it returns as soon as the launcher starts.
+func openInBrowser(url string) error {
+	name := "xdg-open"
+	if runtime.GOOS == "darwin" {
+		name = "open"
+	}
+	return exec.Command(name, url).Start()
+}
+
+// openURLCmd opens url via the injected opener without blocking the TUI. It
+// captures only the opener and url (not the whole model), and no-ops on an empty
+// url so callers can pass a maybe-missing link unconditionally.
+func openURLCmd(open func(string) error, url string) tea.Cmd {
+	if url == "" || open == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		_ = open(url) // a failed browser launch shouldn't disrupt the TUI
+		return nil
+	}
+}
+
 // pollMsg fires on the poll interval while an in-flight run is open.
 type pollMsg struct{}
 
@@ -934,7 +963,12 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if r := a.selectedRun(); r != nil {
 				a.err = nil
 				a.mode = modeLoading
+				a.runUrl = r.RunUrl // carry the web URL so ctrl+o works in the graph too
 				return a, tea.Batch(openRunCmd(a.client, r.ID), a.spinner.Tick)
+			}
+		case tea.KeyCtrlO:
+			if r := a.selectedRun(); r != nil {
+				return a, openURLCmd(a.openURL, r.RunUrl)
 			}
 		case tea.KeyTab:
 			return a.cycleScope(1)
@@ -957,6 +991,11 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.clampListSelection()
 		}
 	case modeGraph:
+		// ctrl+o opens the run's cloud.rwx.com page; it applies to the whole run,
+		// so it works the same in the graph and in the detail/logs pane.
+		if k.Type == tea.KeyCtrlO {
+			return a, openURLCmd(a.openURL, a.runUrl)
+		}
 		// When the detail pane is open it captures Back/Logs; other keys are
 		// inert until it closes.
 		if a.detailOpen {

@@ -93,19 +93,37 @@ Low priority; decide when building.
 
 ## Phases
 
-- **Phase 1 — rwx build link.** Carry `RunUrl` through the open path; `ctrl+b` in
-  list + detail; `openBrowser` helper with injected opener. The easy half
-  (URL is ready-made). Snapshot/unit-test the wiring.
+- **Phase 1 — rwx build link. SHIPPED (2026-07-06).** `ctrl+o` opens the run's
+  cloud.rwx.com page. Key audit confirmed bare letters are all eaten by
+  type-to-filter, but ctrl-chords are wide open (only ^C/^R taken) — chose
+  `ctrl+o` ("open"), not the `ctrl+b`/`ctrl+g` pair, since cloud.rwx.com is *the*
+  page. Details below.
 - **Phase 2 — GitHub commit link.** Git-remote inference → `{owner}/{repo}`
-  base; `ctrl+g` in list + detail; graceful no-op on missing sha/remote/non-
+  base; `ctrl+g` in list + graph; graceful no-op on missing sha/remote/non-
   GitHub host. Unit-test the remote-URL parser (ssh + https forms) and the
-  commit-URL builder.
+  commit-URL builder. If added, `ctrl+o` stays rwx and `ctrl+g` is GitHub.
+
+### Phase 1 as built
+
+- `openInBrowser(url)` (app.go) shells to `open` (darwin) / `xdg-open` (else),
+  fire-and-forget. Injected as `App.openURL func(string) error` so tests assert
+  the dispatched URL with a spy (no real browser launch).
+- `openURLCmd(open, url)` runs it off the update loop, capturing only opener+url
+  (not the model), and no-ops on empty url.
+- List: `ctrl+o` opens `selectedRun().RunUrl` (ready-made). Graph/detail:
+  `ctrl+o` opens `App.runUrl`, which is **carried** from the summary when a run
+  is opened from the list (the `rwx results` payload has no URL). `--run <id>`
+  startup has no summary, so graph `ctrl+o` is a no-op there (acceptable).
+- Keybar shows `^o web` in the list, graph, and detail keybars; locked by
+  `TestFooterKeybarByMode`. Dispatch covered by `TestCtrlOOpensRunUrlFromList`,
+  `TestCtrlOOpensRunUrlFromGraph`, `TestOpeningRunFromListCarriesRunUrl`,
+  `TestCtrlONoopWithoutUrl`.
 
 ## Decisions locked / open
 
-- LOCKED: run-scoped (not node-scoped); available in both list and detail;
-  build URL carried from the summary (not reconstructed from RunID).
-- OPEN: key choice (`ctrl+b`/`ctrl+g` chords vs. an `ctrl+o` chooser).
+- LOCKED: run-scoped (not node-scoped); available in list + graph + detail; build
+  URL carried from the summary (not reconstructed from RunID).
+- LOCKED: `ctrl+o` for the rwx build page (Phase 1 shipped).
 - OPEN: GitHub owner/host source — git remote inference (recommended) vs.
   explicit `--repo-url`; non-GitHub hosts deferred (v1 = github.com only).
 - OPEN: whether `--print` emits the URLs as text.
