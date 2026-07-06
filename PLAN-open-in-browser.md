@@ -1,14 +1,19 @@
-# Open-in-browser — deep links out (proposals)
+# Open-in-browser — deep links out
+
+> **STATUS: SHIPPED** (ctrl+o 16545e5, ctrl+g 917fbad, no-op notice 1d92ff2).
+> Both keys work in the list and the graph/detail, verified end-to-end against a
+> real git-triggered run (see "Verified" below). Kept as the design record.
 
 Two "jump to the source of truth" affordances the user asked for (2026-07-02):
 
-- **Open the run on cloud.rwx.com** — the RWX build page for the selected/open run.
-- **Open the commit on GitHub** — the VCS commit the run was triggered from.
+- **Open the run on cloud.rwx.com** (`ctrl+o`) — the RWX build page for the
+  selected/open run.
+- **Open the commit on GitHub** (`ctrl+g`) — the VCS commit the run was triggered
+  from.
 
 Both are *run-scoped* (they belong to a run, not a graph node), and both apply
-in **two places**: the home run list (the selected row) and the graph
-detail/logs view (the open run). Planner proposals, not locked decisions —
-grounded against current code so the coder can pick one up on greenlight.
+in the home run list (the selected row) and the graph/detail view (the open
+run).
 
 ## Grounding (what data we actually have)
 
@@ -114,9 +119,10 @@ looking like the key did nothing.
 
 ### Phase 1 as built
 
-- `openInBrowser(url)` (app.go) shells to `open` (darwin) / `xdg-open` (else),
-  fire-and-forget. Injected as `App.openURL func(string) error` so tests assert
-  the dispatched URL with a spy (no real browser launch).
+- `openInBrowser(url)` (browser.go) shells to `open` (darwin) / `xdg-open`
+  (else), **waiting** and capturing stderr so a failure surfaces (not the
+  original fire-and-forget). Injected as `App.openURL func(string) error` so
+  tests assert the dispatched URL with a spy (no real browser launch).
 - `openURLCmd(open, url)` runs it off the update loop, capturing only opener+url
   (not the model), and no-ops on empty url.
 - List: `ctrl+o` opens `selectedRun().RunUrl` (ready-made). Graph/detail:
@@ -128,11 +134,36 @@ looking like the key did nothing.
   `TestCtrlOOpensRunUrlFromGraph`, `TestOpeningRunFromListCarriesRunUrl`,
   `TestCtrlONoopWithoutUrl`.
 
+### No-op notice (1d92ff2)
+
+An advertised key that silently does nothing reads as broken. When there's
+nothing to open, a transient footer note (`theme.Special`, cleared on the next
+key) explains why:
+
+- `ctrl+g`, run has no commit → `this run has no commit (CLI-triggered)`
+- `ctrl+g`, no GitHub remote → `no GitHub remote — can't link a commit`
+- `ctrl+o`, no RunUrl → `no rwx page for this run`
+
+`commitNotice(base, sha)` picks the message; `App.notice` renders above the
+footer. Locked by `TestCtrlGNoticeWhenRunHasNoCommit`, `TestNoticeClearsOnNextKey`.
+
+### Verified (2026-07-06)
+
+Discovered that **every run in this repo was `Trigger=cli`** (no commit sha), so
+`ctrl+g` no-op'd everywhere — CLI runs (`rwx run`) carry no commit by design.
+The fix was infra, not code: the repo's `.rwx/ci.yml` already had the
+`on.github.push` trigger, but the **RWX GitHub App wasn't installed** (proven by
+0 check-runs across 8 pushed commits). After installing it, a push produced a
+`github.push` run with a real `CommitSha`, RWX reported `success` back to the
+commit, and `ctrl+g` opened `github.com/chrismo/crux/commit/<sha>` — confirmed
+live in both list and graph. **Lesson: verify a feature against real data, not a
+synthetic fixture with a hand-set sha.**
+
 ## Decisions locked / open
 
 - LOCKED: run-scoped (not node-scoped); available in list + graph + detail; build
   URL carried from the summary (not reconstructed from RunID).
-- LOCKED: `ctrl+o` for the rwx build page (Phase 1 shipped).
-- OPEN: GitHub owner/host source — git remote inference (recommended) vs.
-  explicit `--repo-url`; non-GitHub hosts deferred (v1 = github.com only).
+- LOCKED: `ctrl+o` rwx page, `ctrl+g` GitHub commit; both shipped.
+- LOCKED: GitHub base inferred from the git remote (github.com only); missing
+  sha/remote → transient notice, no `--repo-url` flag needed for now.
 - OPEN: whether `--print` emits the URLs as text.

@@ -1,5 +1,14 @@
 # Graph-view rework plan
 
+> **STATUS: SHIPPED** (b95447e and follow-ups). All three phases landed: the
+> rune-canvas renderer with real connectors, filter-first collapse with
+> path-preserving dashed connectors, and visible-set selection. Since shipping,
+> the interaction model evolved further (kept below for history): selection is
+> **arrows** (not `h/j/k/l` — letters are now type-to-filter), pins replaced the
+> isolate/focus verb, and `esc` walks a focus history stack. Kept as the record
+> of the rework; live behavior is in the code + `PLAN-graph-nav.md` (forward
+> proposals).
+
 Reworking crux's Flow graph view so a complicated DAG is navigable. Decided
 2026-07-01. Primary interaction model: **filter-first collapse** — typing
 narrows the graph to matching nodes plus the paths connecting them.
@@ -68,9 +77,10 @@ nothing fits). No changes to `internal/graph`.
 - **Fixes problems 1 (collapse is the primary fit) and 3.**
 
 ### Phase 3 — Interaction + polish
-- Selection (`h/j/k/l` via `moveSelection` in `internal/ui/app.go`) moves only
-  among **visible** nodes; `ensureSelectedVisible` pans horizontally as well as
-  vertically (fallback pan for the unfiltered full view).
+- Selection (via `moveSelection` in `internal/ui/app.go`; shipped as **arrow
+  keys** since letters became type-to-filter) moves only among **visible** nodes;
+  `ensureSelectedVisible` pans horizontally as well as vertically (fallback pan
+  for the unfiltered full view).
 - Three "gray" treatments made distinct and legible: skipped (state),
   filtered-out (gone), dimmed context (one-hop neighbors of matches, if shown);
   reflect in legend/help.

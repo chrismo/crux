@@ -20,6 +20,14 @@ current code so the coder can pick one up when the user greenlights it.
 The through-line: **pins are a set you edit forward; history is a stack you walk
 backward.** Every proposal below should preserve that split, not re-entangle it.
 
+> **Key-model note (updated 2026-07-06).** Since these proposals were written,
+> the graph became **type-to-filter**: every printable letter builds the filter,
+> so a bare-letter shortcut is no longer available (this is why the `ctrl+r`
+> redo and `l`-to-descend suggestions below need new keys). Taken ctrl-chords:
+> `ctrl+c` quit, `ctrl+r` list refresh, `ctrl+o` open rwx page, `ctrl+g` open
+> commit. Free chords for new verbs include `ctrl+u`/`ctrl+y` (a natural
+> undo/redo-ish pair) among others. Pick from the free set when implementing.
+
 ## 1. Redo (forward stack) — smallest, highest-leverage
 
 `popHistory` currently **discards** the popped state, so `esc` is one-way. Make
@@ -27,8 +35,9 @@ the stack a proper `pushd`/`popd`:
 
 - Add `future []viewState`. On `esc`/`popHistory`, push the *current* state onto
   `future` before restoring the popped one.
-- Add a redo key (`shift+esc` is awkward in terminals — consider `ctrl+r` or a
-  redo binding) that pops `future` back onto `history` and restores it.
+- Add a redo key (`shift+esc` is awkward in terminals, and `ctrl+r` is now taken
+  by list refresh — use a free chord like `ctrl+y`) that pops `future` back onto
+  `history` and restores it.
 - **Any new forward mutation (pin/unpin/filter-commit) clears `future`** — the
   standard undo/redo invariant. Fold this into `pushHistory`.
 
@@ -63,9 +72,11 @@ that: save a `(filter, pins)` under a name and recall it.
 Tie `moveSelection` to the visible-set machinery: descend into the selected
 node's cone as a focus, keyboard-only.
 
-- `l`/enter on a selected node sets focus to that node's ancestor+descendant cone
-  (the `focus.go` cone logic that already backs `ov.Focus`), `pushHistory` first
-  so `esc` backs out.
+- enter (or a free chord — not a bare letter, those type-filter now) on a
+  selected node sets focus to that node's ancestor+descendant cone (the
+  `focus.go` cone logic that already backs `ov.Focus`), `pushHistory` first so
+  `esc` backs out. Note: enter currently opens the node's detail pane, so
+  descend needs either a different key or a mode distinction.
 - Effectively "zoom into this node's world" without typing a filter — the
   fast-navigation power move.
 - Interacts with pins: decide whether descend *adds* a pin (refine) or sets a
