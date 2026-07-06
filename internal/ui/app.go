@@ -3,8 +3,6 @@ package ui
 import (
 	"context"
 	"fmt"
-	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 
@@ -193,6 +191,7 @@ type AppConfig struct {
 	GraphFilter string         // initial graph node filter (type-to-filter seed)
 	ListFilter  string         // initial run-list view filter (type-to-filter seed)
 	DefinitionFilter string    // --definition: persistent DefinitionPath-only list scope
+	GithubBase       string    // https://github.com/{owner}/{repo} for ctrl+g commit links
 }
 
 // App is the root Bubble Tea model. It starts on the run list (the home) and
@@ -223,6 +222,7 @@ type App struct {
 
 	run          rwx.Run
 	runUrl       string    // cloud.rwx.com URL of the open run, carried from the list (ctrl+o)
+	githubBase   string    // https://github.com/{owner}/{repo} for commit links (ctrl+g)
 	graph        *graph.Graph
 	layout       *graph.LayoutData
 	selectedNode string    // key of the highlighted graph node
@@ -249,6 +249,7 @@ func NewApp(client *rwx.Client, cfg AppConfig) App {
 		graphFilter: cfg.GraphFilter,      // optional --graph-filter seed
 		listFilter:  cfg.ListFilter,       // optional --list-filter seed
 		defFilter:   cfg.DefinitionFilter, // optional --definition scope
+		githubBase:  cfg.GithubBase,
 		openURL:     openInBrowser,
 		client:   client,
 		cfg:      cfg,
@@ -664,29 +665,6 @@ func openRunCmd(c *rwx.Client, id string) tea.Cmd {
 	}
 }
 
-// openInBrowser launches url in the OS default browser (macOS `open`, else
-// `xdg-open`). Fire-and-forget: it returns as soon as the launcher starts.
-func openInBrowser(url string) error {
-	name := "xdg-open"
-	if runtime.GOOS == "darwin" {
-		name = "open"
-	}
-	return exec.Command(name, url).Start()
-}
-
-// openURLCmd opens url via the injected opener without blocking the TUI. It
-// captures only the opener and url (not the whole model), and no-ops on an empty
-// url so callers can pass a maybe-missing link unconditionally.
-func openURLCmd(open func(string) error, url string) tea.Cmd {
-	if url == "" || open == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		_ = open(url) // a failed browser launch shouldn't disrupt the TUI
-		return nil
-	}
-}
-
 // pollMsg fires on the poll interval while an in-flight run is open.
 type pollMsg struct{}
 
@@ -884,6 +862,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, refreshRunCmd(a.client, a.run.RunID)
 		}
 		return a, nil
+	case browserOpenedMsg:
+		// Surface a failed launch instead of leaving the user staring at a TUI
+		// that looks like it ignored the key.
+		if m.err != nil {
+			a.err = fmt.Errorf("open browser: %w", m.err)
+		}
+		return a, nil
 	case runRefreshedMsg:
 		if m.err == nil {
 			a.run = m.run
@@ -970,6 +955,10 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if r := a.selectedRun(); r != nil {
 				return a, openURLCmd(a.openURL, r.RunUrl)
 			}
+		case tea.KeyCtrlG:
+			if r := a.selectedRun(); r != nil {
+				return a, openURLCmd(a.openURL, commitURL(a.githubBase, r.CommitSha))
+			}
 		case tea.KeyTab:
 			return a.cycleScope(1)
 		case tea.KeyShiftTab:
@@ -991,10 +980,13 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.clampListSelection()
 		}
 	case modeGraph:
-		// ctrl+o opens the run's cloud.rwx.com page; it applies to the whole run,
-		// so it works the same in the graph and in the detail/logs pane.
+		// ctrl+o (cloud.rwx.com page) and ctrl+g (the run's commit on GitHub) are
+		// run-scoped, so they work the same in the graph and the detail/logs pane.
 		if k.Type == tea.KeyCtrlO {
 			return a, openURLCmd(a.openURL, a.runUrl)
+		}
+		if k.Type == tea.KeyCtrlG {
+			return a, openURLCmd(a.openURL, commitURL(a.githubBase, a.run.CommitSha))
 		}
 		// When the detail pane is open it captures Back/Logs; other keys are
 		// inert until it closes.
@@ -1098,7 +1090,7 @@ func (a App) View() string {
 		return a.spinner.View() + " " + theme.Faint.Render("loading…")
 	case modeList, modeGraph:
 		footer := a.footerView()
-		if a.err != nil && a.mode == modeList {
+		if a.err != nil {
 			footer = theme.Failure.Render(fmt.Sprintf("error: %v", a.err)) + "\n" + footer
 		}
 		return lipgloss.JoinVertical(lipgloss.Left, a.viewport.View(), footer)

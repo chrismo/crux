@@ -107,6 +107,7 @@ func run(opts options) error {
 		Run: opts.run, Filter: filter, Pins: splitPins(opts.pin),
 		GraphFilter: opts.graphFilter, ListFilter: opts.listFilter,
 		DefinitionFilter: opts.definition,
+		GithubBase:       ui.GithubBaseURL(opts.dir), // for ctrl+g commit links
 	})
 	_, err := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
 	return err

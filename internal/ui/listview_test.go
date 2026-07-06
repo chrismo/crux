@@ -83,6 +83,43 @@ func TestListStatusShowsDefScope(t *testing.T) {
 	}
 }
 
+func TestParseGithubRemote(t *testing.T) {
+	want := "https://github.com/chrismo/crux"
+	for _, remote := range []string{
+		"git@github.com:chrismo/crux.git",
+		"git@github.com:chrismo/crux",
+		"https://github.com/chrismo/crux.git",
+		"https://github.com/chrismo/crux",
+		"ssh://git@github.com/chrismo/crux.git",
+	} {
+		if got := parseGithubRemote(remote); got != want {
+			t.Errorf("parseGithubRemote(%q) = %q, want %q", remote, got, want)
+		}
+	}
+	// Non-GitHub hosts get no link (v1).
+	for _, remote := range []string{
+		"git@gitlab.com:chrismo/crux.git",
+		"https://bitbucket.org/chrismo/crux.git",
+		"",
+	} {
+		if got := parseGithubRemote(remote); got != "" {
+			t.Errorf("parseGithubRemote(%q) = %q, want empty", remote, got)
+		}
+	}
+}
+
+func TestCommitURL(t *testing.T) {
+	if got := commitURL("https://github.com/chrismo/crux", "abc123"); got != "https://github.com/chrismo/crux/commit/abc123" {
+		t.Errorf("commitURL = %q", got)
+	}
+	if got := commitURL("", "abc123"); got != "" {
+		t.Errorf("commitURL with no base should be empty, got %q", got)
+	}
+	if got := commitURL("https://github.com/chrismo/crux", ""); got != "" {
+		t.Errorf("commitURL with no sha should be empty, got %q", got)
+	}
+}
+
 func TestRenderRunListEmpty(t *testing.T) {
 	out := RenderRunList(nil, 0, time.Now())
 	if !strings.Contains(out, "no runs") {

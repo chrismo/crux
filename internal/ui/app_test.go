@@ -78,7 +78,7 @@ func TestFooterKeybarByMode(t *testing.T) {
 
 	a.mode = modeList
 	listFooter := a.footerView()
-	for _, want := range []string{"move", "filter", "scope", "open", "web", "quit"} {
+	for _, want := range []string{"move", "filter", "scope", "open", "web", "commit", "quit"} {
 		if !strings.Contains(listFooter, want) {
 			t.Errorf("list footer missing %q:\n%s", want, listFooter)
 		}
@@ -90,7 +90,7 @@ func TestFooterKeybarByMode(t *testing.T) {
 
 	a.mode = modeGraph
 	graphFooter := a.footerView()
-	for _, want := range []string{"back", "pin", "filter", "list", "web"} {
+	for _, want := range []string{"back", "pin", "filter", "list", "web", "commit"} {
 		if !strings.Contains(graphFooter, want) {
 			t.Errorf("graph footer missing %q:\n%s", want, graphFooter)
 		}
@@ -100,7 +100,7 @@ func TestFooterKeybarByMode(t *testing.T) {
 	// advertise graph actions that do nothing there (list, pin, filter).
 	a.detailOpen = true
 	detailFooter := a.footerView()
-	for _, want := range []string{"scroll", "logs", "back", "web"} {
+	for _, want := range []string{"scroll", "logs", "back", "web", "commit"} {
 		if !strings.Contains(detailFooter, want) {
 			t.Errorf("detail footer missing %q:\n%s", want, detailFooter)
 		}
@@ -731,6 +731,53 @@ func TestCtrlOOpensRunUrlFromGraph(t *testing.T) {
 	cmd()
 	if opened != a.runUrl {
 		t.Errorf("graph ctrl+o opened %q, want %q", opened, a.runUrl)
+	}
+}
+
+// ctrl+g on a list row opens that run's commit on GitHub (base from the git
+// remote, sha from the run).
+func TestCtrlGOpensCommitFromList(t *testing.T) {
+	var opened string
+	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{Limit: 30}, GithubBase: "https://github.com/chrismo/crux"})
+	a.openURL = func(u string) error { opened = u; return nil }
+	m, _ := a.Update(runsLoadedMsg{runs: []rwx.RunSummary{{ID: "r1", CommitSha: "abc123"}}})
+	a = m.(App)
+
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
+	if cmd == nil {
+		t.Fatal("ctrl+g should open the commit page")
+	}
+	cmd()
+	if want := "https://github.com/chrismo/crux/commit/abc123"; opened != want {
+		t.Errorf("opened %q, want %q", opened, want)
+	}
+}
+
+// In the graph, ctrl+g uses the open run's own commit sha.
+func TestCtrlGOpensCommitFromGraph(t *testing.T) {
+	var opened string
+	a := openGraph(t, "sample_dag_failed.json")
+	a.openURL = func(u string) error { opened = u; return nil }
+	a.githubBase = "https://github.com/chrismo/crux"
+	a.run.CommitSha = "def456"
+
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
+	if cmd == nil {
+		t.Fatal("ctrl+g should open the commit page in graph mode")
+	}
+	cmd()
+	if want := "https://github.com/chrismo/crux/commit/def456"; opened != want {
+		t.Errorf("opened %q, want %q", opened, want)
+	}
+}
+
+// ctrl+g no-ops (no command) when there's no GitHub base (non-GitHub or no remote).
+func TestCtrlGNoopWithoutGithubBase(t *testing.T) {
+	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{Limit: 30}}) // no GithubBase
+	m, _ := a.Update(runsLoadedMsg{runs: []rwx.RunSummary{{ID: "r1", CommitSha: "abc123"}}})
+	a = m.(App)
+	if _, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlG}); cmd != nil {
+		t.Error("ctrl+g with no GitHub base should not return a command")
 	}
 }
 

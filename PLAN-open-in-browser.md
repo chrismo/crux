@@ -98,10 +98,19 @@ Low priority; decide when building.
   type-to-filter, but ctrl-chords are wide open (only ^C/^R taken) — chose
   `ctrl+o` ("open"), not the `ctrl+b`/`ctrl+g` pair, since cloud.rwx.com is *the*
   page. Details below.
-- **Phase 2 — GitHub commit link.** Git-remote inference → `{owner}/{repo}`
-  base; `ctrl+g` in list + graph; graceful no-op on missing sha/remote/non-
-  GitHub host. Unit-test the remote-URL parser (ssh + https forms) and the
-  commit-URL builder. If added, `ctrl+o` stays rwx and `ctrl+g` is GitHub.
+- **Phase 2 — GitHub commit link. SHIPPED (2026-07-06).** `ctrl+g` opens the
+  run's commit on GitHub. `{owner}/{repo}` base inferred once at startup from the
+  git remote (`GithubBaseURL(dir)`, ssh + https + ssh:// forms); non-GitHub hosts
+  and missing sha/remote no-op gracefully. `commitURL(base, sha)`. Works in list
+  (row's CommitSha), graph, and detail (the open run's CommitSha — no carry
+  needed, `rwx results` provides it). Keybar `^g commit`. Tested:
+  `parseGithubRemote`, `commitURL`, and list/graph dispatch + no-op.
+  `ctrl+o` stays rwx, `ctrl+g` is GitHub.
+
+Also in this pass: the opener moved to `browser.go` and now **waits and reports
+failures** (was fire-and-forget `.Start()` swallowing errors) — a failed launch
+surfaces as `error: open browser: …` in the footer (list and graph) instead of
+looking like the key did nothing.
 
 ### Phase 1 as built
 
