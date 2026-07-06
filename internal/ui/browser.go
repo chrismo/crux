@@ -79,3 +79,17 @@ func commitURL(base, sha string) string {
 	}
 	return base + "/commit/" + sha
 }
+
+// commitNotice explains why ctrl+g had nothing to open, so an advertised key
+// that no-ops doesn't read as broken. Distinguishes "no GitHub remote" from the
+// common "CLI-triggered run has no commit" case.
+func commitNotice(base, sha string) string {
+	switch {
+	case base == "":
+		return "no GitHub remote — can't link a commit"
+	case sha == "":
+		return "this run has no commit (CLI-triggered)"
+	default:
+		return ""
+	}
+}

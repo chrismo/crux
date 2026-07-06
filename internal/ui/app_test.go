@@ -771,13 +771,51 @@ func TestCtrlGOpensCommitFromGraph(t *testing.T) {
 	}
 }
 
-// ctrl+g no-ops (no command) when there's no GitHub base (non-GitHub or no remote).
+// ctrl+g no-ops (no command) when there's no GitHub base, and explains why via a
+// footer notice instead of silently doing nothing.
 func TestCtrlGNoopWithoutGithubBase(t *testing.T) {
 	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{Limit: 30}}) // no GithubBase
 	m, _ := a.Update(runsLoadedMsg{runs: []rwx.RunSummary{{ID: "r1", CommitSha: "abc123"}}})
 	a = m.(App)
-	if _, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlG}); cmd != nil {
+	m, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
+	a = m.(App)
+	if cmd != nil {
 		t.Error("ctrl+g with no GitHub base should not return a command")
+	}
+	if a.notice == "" {
+		t.Error("ctrl+g with nothing to open should set an explanatory notice")
+	}
+}
+
+// A run with no commit (CLI-triggered) sets the "no commit" notice, not silence.
+func TestCtrlGNoticeWhenRunHasNoCommit(t *testing.T) {
+	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{Limit: 30}, GithubBase: "https://github.com/chrismo/crux"})
+	m, _ := a.Update(runsLoadedMsg{runs: []rwx.RunSummary{{ID: "r1", CommitSha: ""}}})
+	a = m.(App)
+	m, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
+	a = m.(App)
+	if cmd != nil {
+		t.Error("ctrl+g on a run with no commit should not return a command")
+	}
+	if !strings.Contains(a.notice, "commit") {
+		t.Errorf("expected a 'no commit' notice, got %q", a.notice)
+	}
+}
+
+// The notice is transient: the next keypress clears it.
+func TestNoticeClearsOnNextKey(t *testing.T) {
+	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{Limit: 30}, GithubBase: "https://github.com/chrismo/crux"})
+	m, _ := a.Update(runsLoadedMsg{runs: []rwx.RunSummary{{ID: "r1", CommitSha: ""}}})
+	a = m.(App)
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
+	a = m.(App)
+	if a.notice == "" {
+		t.Fatal("precondition: ctrl+g should have set a notice")
+	}
+	m, _ = a.Update(tea.KeyMsg{Type: tea.KeyDown})
+	a = m.(App)
+	if a.notice != "" {
+		t.Errorf("notice should clear on the next key, still %q", a.notice)
 	}
 }
 

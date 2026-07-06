@@ -237,7 +237,8 @@ type App struct {
 
 	openURL func(string) error // opens a URL in the browser (injected for tests)
 
-	err error
+	notice string // transient one-line footer note (e.g. "nothing to open"); cleared on the next key
+	err    error
 }
 
 // NewApp builds the root model. The viewport is seeded with a sane default size
@@ -920,6 +921,7 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if k.Type == tea.KeyCtrlC {
 		return a, tea.Quit
 	}
+	a.notice = "" // transient: any keypress clears the previous note
 
 	switch a.mode {
 	case modeList:
@@ -953,11 +955,17 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyCtrlO:
 			if r := a.selectedRun(); r != nil {
-				return a, openURLCmd(a.openURL, r.RunUrl)
+				if r.RunUrl != "" {
+					return a, openURLCmd(a.openURL, r.RunUrl)
+				}
+				a.notice = "no rwx page for this run"
 			}
 		case tea.KeyCtrlG:
 			if r := a.selectedRun(); r != nil {
-				return a, openURLCmd(a.openURL, commitURL(a.githubBase, r.CommitSha))
+				if url := commitURL(a.githubBase, r.CommitSha); url != "" {
+					return a, openURLCmd(a.openURL, url)
+				}
+				a.notice = commitNotice(a.githubBase, r.CommitSha)
 			}
 		case tea.KeyTab:
 			return a.cycleScope(1)
@@ -983,10 +991,18 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// ctrl+o (cloud.rwx.com page) and ctrl+g (the run's commit on GitHub) are
 		// run-scoped, so they work the same in the graph and the detail/logs pane.
 		if k.Type == tea.KeyCtrlO {
-			return a, openURLCmd(a.openURL, a.runUrl)
+			if a.runUrl != "" {
+				return a, openURLCmd(a.openURL, a.runUrl)
+			}
+			a.notice = "no rwx page for this run"
+			return a, nil
 		}
 		if k.Type == tea.KeyCtrlG {
-			return a, openURLCmd(a.openURL, commitURL(a.githubBase, a.run.CommitSha))
+			if url := commitURL(a.githubBase, a.run.CommitSha); url != "" {
+				return a, openURLCmd(a.openURL, url)
+			}
+			a.notice = commitNotice(a.githubBase, a.run.CommitSha)
+			return a, nil
 		}
 		// When the detail pane is open it captures Back/Logs; other keys are
 		// inert until it closes.
@@ -1090,8 +1106,11 @@ func (a App) View() string {
 		return a.spinner.View() + " " + theme.Faint.Render("loading…")
 	case modeList, modeGraph:
 		footer := a.footerView()
-		if a.err != nil {
+		switch {
+		case a.err != nil:
 			footer = theme.Failure.Render(fmt.Sprintf("error: %v", a.err)) + "\n" + footer
+		case a.notice != "":
+			footer = theme.Special.Render(a.notice) + "\n" + footer
 		}
 		return lipgloss.JoinVertical(lipgloss.Left, a.viewport.View(), footer)
 	}
