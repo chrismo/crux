@@ -26,7 +26,7 @@ var (
 // options holds the parsed command-line configuration.
 type options struct {
 	branch     string // branch to resolve a run for (default: current git branch)
-	definition string // .rwx definition path, required when a branch has several
+	definition string // substring scoping the run list to matching DefinitionPaths
 	run         string // explicit run ID to open
 	dir         string // checkout dir for the static-YAML fallback (default: cwd)
 	pin         string // comma-separated substring terms to pre-pin in the graph
@@ -42,7 +42,7 @@ func parseFlags(args []string) (options, error) {
 	fs := flag.NewFlagSet("crux", flag.ContinueOnError)
 	var o options
 	fs.StringVar(&o.branch, "branch", "", "branch to resolve a run for (default: current git branch)")
-	fs.StringVar(&o.definition, "definition", "", "RWX definition path (required when a branch has multiple)")
+	fs.StringVar(&o.definition, "definition", "", "scope the run list to definitions matching this substring (e.g. --definition app-dscout)")
 	fs.StringVar(&o.run, "run", "", "explicit run ID to open")
 	fs.StringVar(&o.dir, "dir", ".", "checkout directory for the static-YAML fallback")
 	fs.StringVar(&o.pin, "pin", "", "comma-separated substring terms to pre-pin (e.g. --pin api,deploy)")
@@ -106,6 +106,7 @@ func run(opts options) error {
 	app := ui.NewApp(client, ui.AppConfig{
 		Run: opts.run, Filter: filter, Pins: splitPins(opts.pin),
 		GraphFilter: opts.graphFilter, ListFilter: opts.listFilter,
+		DefinitionFilter: opts.definition,
 	})
 	_, err := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
 	return err
@@ -125,7 +126,7 @@ func printOnce(client *rwx.Client, opts options, filter rwx.ListFilter) error {
 	if err != nil {
 		return err
 	}
-	vis := ui.FilterRunList(rl.Runs, opts.listFilter)
-	fmt.Print(ui.HomeView(vis, 0, time.Now(), ui.FetchLabel(filter), opts.listFilter, len(rl.Runs)))
+	vis := ui.FilterRunList(ui.FilterByDefinition(rl.Runs, opts.definition), opts.listFilter)
+	fmt.Print(ui.HomeView(vis, 0, time.Now(), ui.FetchLabel(filter), opts.definition, opts.listFilter, len(rl.Runs)))
 	return nil
 }

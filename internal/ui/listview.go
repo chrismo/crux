@@ -29,6 +29,24 @@ func FilterRunList(runs []rwx.RunSummary, term string) []rwx.RunSummary {
 	return out
 }
 
+// FilterByDefinition narrows runs to those whose DefinitionPath contains term
+// (case-insensitive). Empty term returns runs unchanged. This is the
+// --definition scope: DefinitionPath-only, unlike FilterRunList's tri-field
+// match, so `--definition app-dscout` targets `.rwx/app-dscout.yml` precisely.
+func FilterByDefinition(runs []rwx.RunSummary, term string) []rwx.RunSummary {
+	if term == "" {
+		return runs
+	}
+	f := strings.ToLower(term)
+	out := make([]rwx.RunSummary, 0, len(runs))
+	for _, r := range runs {
+		if strings.Contains(strings.ToLower(r.DefinitionPath), f) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // ScopeLabel names the Tab-cycle fetch scope ("all"/"mine"/"branch"). Used to
 // track and advance the cycle, not for display.
 func ScopeLabel(f rwx.ListFilter) string {

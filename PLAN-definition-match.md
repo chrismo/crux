@@ -84,11 +84,29 @@ Recommendation to decide: either
 
 ## Decisions locked / open
 
-- OBSERVED FACT: `--definition` is currently dead (parsed, never read).
+- OBSERVED FACT: `--definition` was dead (parsed, never read).
 - LOCKED: partial = case-insensitive substring over `DefinitionPath`, consistent
   with the type-to-filter law.
-- OPEN: (A) give `--definition` a distinct definition-only + auto-open job, or
-  (B) drop it in favor of `--list-filter`. Decide before building.
-- OPEN: single-match behavior — open the graph directly vs. show a 1-definition
-  list.
-- OPEN: multi-match — narrow the list (leaning) vs. error on ambiguity.
+
+## SHIPPED (2026-07-03)
+
+Chose option (A), as a **persistent DefinitionPath-only view scope** — not an
+alias for `--list-filter`, and no auto-open:
+
+- `FilterByDefinition(runs, term)` (listview.go) matches `DefinitionPath` only,
+  case-insensitive; empty = passthrough. Distinct from `FilterRunList`'s
+  tri-field match, so `--definition ci` won't hit a Title containing "ci".
+- `App.defFilter` (from `AppConfig.DefinitionFilter` ← `--definition`) is a
+  **persistent scope**: `visibleRuns` = `FilterRunList(FilterByDefinition(runs,
+  defFilter), listFilter)`. Typing narrows *within* the scope; **esc clears the
+  typed filter but keeps the def scope** (that's why it isn't just a `listFilter`
+  seed — a shared field would corrupt on the next keystroke).
+- Single vs. multi match are **uniform**: always narrow the list, never
+  auto-open. No-match shows an empty list with the scope still in the header
+  (`def: X  (0 of N shown)`), not everything.
+- Header via `listStatus`: `def: <term>` sits between the fetch scope and the
+  typed `filter:`, with the shared `(n of N shown)` count.
+- Honest limitation (same as all view filters): only sees loaded pages.
+
+Deferred: a key to drop the def scope interactively (today it's restart-only);
+non-substring/exact matching. Revisit if the persistent scope feels trapping.

@@ -685,6 +685,31 @@ func TestOpeningDetailResetsHorizontalScroll(t *testing.T) {
 	}
 }
 
+// --definition sets a persistent definition-path scope: it narrows the list,
+// typing narrows further WITHIN it, and esc clears the typed filter but keeps
+// the scope.
+func TestDefinitionScopeNarrowsList(t *testing.T) {
+	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{Limit: 30}, DefinitionFilter: "prime"})
+	m, _ := a.Update(runsLoadedMsg{runs: loadRunList(t)})
+	a = m.(App)
+	if got := len(a.visibleRuns()); got != 1 {
+		t.Fatalf("def scope 'prime' should show 1 run, got %d of %d", got, len(a.runs))
+	}
+
+	pressRunes(&a, "zzz") // narrows within the def scope; matches nothing
+	if got := len(a.visibleRuns()); got != 0 {
+		t.Errorf("typing should stack on the def scope, got %d", got)
+	}
+
+	sendType(&a, tea.KeyEsc) // clears the typed filter, keeps the def scope
+	if a.defFilter != "prime" {
+		t.Errorf("esc should keep the def scope, got %q", a.defFilter)
+	}
+	if got := len(a.visibleRuns()); got != 1 {
+		t.Errorf("after esc the def scope should still show 1 run, got %d", got)
+	}
+}
+
 // The run list scrolls to keep the selection visible past the initially-shown
 // window (regression: list nav never followed the cursor, so only the top rows
 // that fit were reachable).

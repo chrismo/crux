@@ -133,16 +133,16 @@ func short(id string) string {
 
 // HomeView renders the run-list landing (header, status line, list). runs is
 // the already view-filtered slice; total is the full fetched count (for the
-// "(n of N shown)" hint). scope is the fetch scope ("all"/"mine"/"branch") and
-// filter is the active view-filter term.
-func HomeView(runs []rwx.RunSummary, selected int, now time.Time, scope, filter string, total int) string {
+// "(n of N shown)" hint). scope is the fetch scope ("all"/"mine"/"branch"), def
+// is the --definition scope, and filter is the active view-filter term.
+func HomeView(runs []rwx.RunSummary, selected int, now time.Time, scope, def, filter string, total int) string {
 	var b strings.Builder
 	header := "crux"
 	if len(runs) > 0 && runs[0].RepositoryName != "" {
 		header += " · " + runs[0].RepositoryName
 	}
 	b.WriteString(theme.Header.Render(header))
-	if s := listStatus(scope, filter, len(runs), total); s != "" {
+	if s := listStatus(scope, def, filter, len(runs), total); s != "" {
 		b.WriteString("  " + theme.Special.Render(s))
 	}
 	b.WriteString("\n\n")
@@ -151,18 +151,26 @@ func HomeView(runs []rwx.RunSummary, selected int, now time.Time, scope, filter 
 	return b.String()
 }
 
-// listStatus is the header suffix describing the two filter tiers: the fetch
-// scope (empty for the default "all" scope) and the view filter with a
-// shown/total count.
-func listStatus(scope, filter string, shown, total int) string {
+// listStatus is the header suffix describing the filter tiers: the fetch scope
+// (empty for the default "all"), the --definition scope, and the typed view
+// filter. The shown/total count is appended whenever a view filter (def or
+// typed) is narrowing the list.
+func listStatus(scope, def, filter string, shown, total int) string {
 	var parts []string
 	if scope != "" {
 		parts = append(parts, scope)
 	}
-	if filter != "" {
-		parts = append(parts, fmt.Sprintf("filter: %s  (%d of %d shown)", filter, shown, total))
+	if def != "" {
+		parts = append(parts, "def: "+def)
 	}
-	return strings.Join(parts, " · ")
+	if filter != "" {
+		parts = append(parts, "filter: "+filter)
+	}
+	s := strings.Join(parts, " · ")
+	if def != "" || filter != "" {
+		s += fmt.Sprintf("  (%d of %d shown)", shown, total)
+	}
+	return s
 }
 
 // ---- App router (list <-> graph) -----------------------------------------
@@ -182,6 +190,7 @@ type AppConfig struct {
 	Pins        []string       // substring terms to pre-pin on the first run opened
 	GraphFilter string         // initial graph node filter (type-to-filter seed)
 	ListFilter  string         // initial run-list view filter (type-to-filter seed)
+	DefinitionFilter string    // --definition: persistent DefinitionPath-only list scope
 }
 
 // App is the root Bubble Tea model. It starts on the run list (the home) and
@@ -205,6 +214,7 @@ type App struct {
 
 	runs        []rwx.RunSummary
 	selected    int    // index into the *visible* (view-filtered) runs
+	defFilter   string // --definition scope: DefinitionPath-only, persists past esc
 	listFilter  string // client-side view filter over the fetched runs (type-to-filter)
 	nextCursor  string // pagination cursor for the next page ("" = no more)
 	loadingMore bool
@@ -231,8 +241,9 @@ func NewApp(client *rwx.Client, cfg AppConfig) App {
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
 	sp.Style = theme.Running
 	return App{
-		graphFilter: cfg.GraphFilter, // optional --graph-filter seed
-		listFilter:  cfg.ListFilter,  // optional --list-filter seed
+		graphFilter: cfg.GraphFilter,      // optional --graph-filter seed
+		listFilter:  cfg.ListFilter,       // optional --list-filter seed
+		defFilter:   cfg.DefinitionFilter, // optional --definition scope
 		client:   client,
 		cfg:      cfg,
 		now:      time.Now,
@@ -251,7 +262,7 @@ func NewApp(client *rwx.Client, cfg AppConfig) App {
 func (a App) bodyContent() string {
 	switch a.mode {
 	case modeList:
-		return HomeView(a.visibleRuns(), a.selected, a.now(), FetchLabel(a.cfg.Filter), a.listFilter, len(a.runs))
+		return HomeView(a.visibleRuns(), a.selected, a.now(), FetchLabel(a.cfg.Filter), a.defFilter, a.listFilter, len(a.runs))
 	case modeGraph:
 		if a.detailOpen {
 			switch {
@@ -700,7 +711,9 @@ func (a App) reloadList(f rwx.ListFilter) (tea.Model, tea.Cmd) {
 // case-insensitive substring over title, definition path, and branch). This is
 // the "view filter" tier; the fetch filter (a.cfg.Filter) decides what's loaded.
 func (a *App) visibleRuns() []rwx.RunSummary {
-	return FilterRunList(a.runs, a.listFilter)
+	// Two stacked view filters: the persistent --definition scope (DefinitionPath
+	// only), then the interactive type-to-filter within it.
+	return FilterRunList(FilterByDefinition(a.runs, a.defFilter), a.listFilter)
 }
 
 // selectedRun returns the currently-selected visible run, or nil if none.

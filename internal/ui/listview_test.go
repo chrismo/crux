@@ -49,6 +49,40 @@ func TestRenderRunList(t *testing.T) {
 	}
 }
 
+// FilterByDefinition is the --definition scope: a substring match over the
+// DefinitionPath ONLY (not Title/Branch), case-insensitive.
+func TestFilterByDefinition(t *testing.T) {
+	runs := loadRunList(t) // 7 .rwx/ci.yml + 1 .rwx/prime-cache.yml
+
+	got := FilterByDefinition(runs, "prime")
+	if len(got) != 1 || got[0].DefinitionPath != ".rwx/prime-cache.yml" {
+		t.Fatalf("FilterByDefinition(prime) = %d runs, want 1 prime-cache", len(got))
+	}
+	if len(FilterByDefinition(runs, "PRIME")) != 1 {
+		t.Error("match should be case-insensitive")
+	}
+	if len(FilterByDefinition(runs, "")) != len(runs) {
+		t.Error("empty term should return all runs")
+	}
+	// "initiated" appears only in the Titles, never a DefinitionPath — a def
+	// filter must not match it (that's FilterRunList's job).
+	if n := len(FilterByDefinition(runs, "initiated")); n != 0 {
+		t.Errorf("def filter matched a title substring (%d); should match DefinitionPath only", n)
+	}
+}
+
+// The header status line surfaces the def scope alongside the typed filter.
+func TestListStatusShowsDefScope(t *testing.T) {
+	got := listStatus("", "app-dscout", "", 3, 40)
+	if !strings.Contains(got, "def: app-dscout") || !strings.Contains(got, "3 of 40") {
+		t.Errorf("def-only status = %q", got)
+	}
+	got = listStatus("mine", "app-dscout", "web", 2, 40)
+	if !strings.Contains(got, "mine") || !strings.Contains(got, "def: app-dscout") || !strings.Contains(got, "filter: web") {
+		t.Errorf("scope+def+filter status = %q", got)
+	}
+}
+
 func TestRenderRunListEmpty(t *testing.T) {
 	out := RenderRunList(nil, 0, time.Now())
 	if !strings.Contains(out, "no runs") {
