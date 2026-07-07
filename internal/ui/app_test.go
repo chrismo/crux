@@ -137,28 +137,6 @@ func TestResizeSizesViewportAndRenders(t *testing.T) {
 	}
 }
 
-func TestMouseClickSelectsRow(t *testing.T) {
-	a := NewApp(nil, AppConfig{})
-	m, _ := a.Update(runsLoadedMsg{runs: loadRunList(t)})
-	a = m.(App)
-	m, _ = a.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	a = m.(App)
-
-	// Rows start after the header + blank line, so row index 2 is at Y=4.
-	m, _ = a.Update(tea.MouseMsg{Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, Y: 4})
-	a = m.(App)
-	if a.selected != 2 {
-		t.Errorf("click at Y=4 selected %d, want 2", a.selected)
-	}
-
-	// A wheel event must not panic and leaves selection unchanged.
-	m, _ = a.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
-	a = m.(App)
-	if a.selected != 2 {
-		t.Errorf("wheel changed selection to %d, want 2", a.selected)
-	}
-}
-
 func TestGraphSelectionNav(t *testing.T) {
 	a := NewApp(nil, AppConfig{})
 	m, _ := a.Update(runOpenedMsg{run: loadRun(t, "run_succeeded.json")})
@@ -605,8 +583,8 @@ func TestDetailPaneAndLogs(t *testing.T) {
 	}
 }
 
-// The detail/log pane must scroll by keyboard, not just the mouse wheel: with a
-// long log open, Down moves the viewport.
+// The detail/log pane must scroll by keyboard (the only scroll mechanism now
+// that mouse tracking is off): with a long log open, Down moves the viewport.
 func TestLogPaneKeyboardScroll(t *testing.T) {
 	a := openGraph(t, "run_failed.json")
 	m, _ := a.Update(tea.KeyMsg{Type: tea.KeyEnter}) // open detail

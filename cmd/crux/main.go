@@ -109,7 +109,11 @@ func run(opts options) error {
 		DefinitionFilter: opts.definition,
 		GithubBase:       ui.GithubBaseURL(opts.dir), // for ctrl+g commit links
 	})
-	_, err := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
+	// No mouse tracking: any SGR mouse mode makes the terminal route click-drag
+	// to us instead of doing its own text selection, so the user can't
+	// select/copy log lines. crux is keyboard-first (arrows/PgUp/PgDn scroll),
+	// so we give the mouse back to the terminal.
+	_, err := tea.NewProgram(app, tea.WithAltScreen()).Run()
 	return err
 }
 

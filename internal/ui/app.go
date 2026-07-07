@@ -800,24 +800,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		a.spinner, cmd = a.spinner.Update(m)
 		return a, cmd
-	case tea.MouseMsg:
-		switch m.Button {
-		case tea.MouseButtonWheelUp, tea.MouseButtonWheelDown:
-			var cmd tea.Cmd
-			a.viewport, cmd = a.viewport.Update(m)
-			return a, cmd
-		case tea.MouseButtonLeft:
-			if m.Action == tea.MouseActionPress && a.mode == modeList {
-				// HomeView is: header line, blank line, then one row per run.
-				idx := m.Y + a.viewport.YOffset - 2
-				if idx >= 0 && idx < len(a.visibleRuns()) {
-					a.selected = idx
-					a.refresh()
-				}
-			}
-			return a, nil
-		}
-		return a, nil
 	case runsLoadedMsg:
 		a.err = m.err
 		a.loadingMore = false
@@ -902,8 +884,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a = model.(App)
 		a.refresh()
 		// Keep the cursor in view: graph nav pans to the selected node, list nav
-		// scrolls to the selected row. Free scrolling stays available via the
-		// mouse wheel.
+		// scrolls to the selected row.
 		switch {
 		case a.mode == modeGraph && !a.detailOpen:
 			a.ensureSelectedVisible()
@@ -1032,8 +1013,8 @@ func (a App) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 				a.viewport.GotoBottom()
 				return a, nil
 			default:
-				// Keyboard-scroll the pane (Up/Down/PgUp/PgDn/etc.) — previously
-				// only the mouse wheel could scroll a long detail/log pane.
+				// Keyboard-scroll the pane (Up/Down/PgUp/PgDn/etc.) — the only way
+				// to scroll a long detail/log pane now that mouse tracking is off.
 				var cmd tea.Cmd
 				a.viewport, cmd = a.viewport.Update(k)
 				return a, cmd
