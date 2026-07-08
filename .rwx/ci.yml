@@ -13,6 +13,10 @@ on:
       commit-sha: ${{ event.git.sha }}
   github:
     push:
+      # Skip tag pushes: a release tags the just-pushed commit, which would
+      # otherwise re-run the whole graph on an identical tree. event.git.tag is
+      # empty for branch pushes, set for tag pushes.
+      if: ${{ event.git.tag == '' }}
       init:
         commit-sha: ${{ event.git.sha }}
     pull_request:
