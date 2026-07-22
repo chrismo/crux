@@ -631,7 +631,11 @@ type runsLoadedMsg struct {
 	runs   []rwx.RunSummary
 	cursor string
 	append bool
-	err    error
+	// refresh marks a background auto-refresh rather than a user-initiated
+	// load: it replaces the page in place, keeping the cursor and scroll
+	// position where the reader left them.
+	refresh bool
+	err     error
 }
 
 type runOpenedMsg struct {
@@ -643,6 +647,15 @@ func listRunsCmd(c *rwx.Client, f rwx.ListFilter, appendPage bool) tea.Cmd {
 	return func() tea.Msg {
 		rl, err := c.ListRuns(context.Background(), f)
 		return runsLoadedMsg{runs: rl.Runs, cursor: rl.Pagination.NextCursor, append: appendPage, err: err}
+	}
+}
+
+// refreshListCmd re-fetches the first page for the auto-refresh tick.
+func refreshListCmd(c *rwx.Client, f rwx.ListFilter) tea.Cmd {
+	return func() tea.Msg {
+		f.Cursor = "" // always the newest page; paged-in extras are re-fetched on demand
+		rl, err := c.ListRuns(context.Background(), f)
+		return runsLoadedMsg{runs: rl.Runs, cursor: rl.Pagination.NextCursor, refresh: true, err: err}
 	}
 }
 
@@ -667,6 +680,27 @@ func openRunCmd(c *rwx.Client, id string) tea.Cmd {
 
 // pollMsg fires on the poll interval while an in-flight run is open.
 type pollMsg struct{}
+
+// listPollMsg drives the run list's auto-refresh. It is a separate tick from
+// pollMsg so the two chains never consume each other's ticks: this one runs for
+// the whole session (re-arming even while a run is open, so esc back to the list
+// resumes refreshing) and is the only chain the list starts.
+type listPollMsg struct{}
+
+func listPollTick(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return listPollMsg{} })
+}
+
+// listPollInterval refreshes faster while runs are still moving, and backs off
+// once the whole page has settled.
+func listPollInterval(runs []rwx.RunSummary) time.Duration {
+	for _, r := range runs {
+		if r.Status.Execution == "in_progress" || r.Status.Execution == "waiting" {
+			return 5 * time.Second
+		}
+	}
+	return 15 * time.Second
+}
 
 // runRefreshedMsg carries a poll refresh of the open run (unlike runOpenedMsg it
 // preserves the cursor and scroll position).
@@ -732,6 +766,22 @@ func (a *App) selectedRun() *rwx.RunSummary {
 	return &vis[a.selected]
 }
 
+// selectRunByID moves the selection to the run with the given ID, so an
+// auto-refresh keeps the reader on the row they were looking at even when newer
+// runs push it down. Falls back to clamping when the run is gone (or filtered
+// out) rather than jumping to the top.
+func (a *App) selectRunByID(id string) {
+	if id != "" {
+		for i, r := range a.visibleRuns() {
+			if r.ID == id {
+				a.selected = i
+				return
+			}
+		}
+	}
+	a.clampListSelection()
+}
+
 // clampListSelection keeps the selection within the visible rows after the view
 // filter changes.
 func (a *App) clampListSelection() {
@@ -785,7 +835,9 @@ func (a App) Init() tea.Cmd {
 	} else {
 		fetch = listRunsCmd(a.client, a.cfg.Filter, false)
 	}
-	return tea.Batch(fetch, a.spinner.Tick)
+	// The list auto-refresh chain starts once, here, and re-arms itself for the
+	// rest of the session — starting it anywhere else risks two chains ticking.
+	return tea.Batch(fetch, a.spinner.Tick, listPollTick(listPollInterval(nil)))
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -803,11 +855,28 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.spinner, cmd = a.spinner.Update(m)
 		return a, cmd
 	case runsLoadedMsg:
-		a.err = m.err
 		a.loadingMore = false
-		if m.append {
+		// A background refresh must never disturb the reader. On a transient
+		// fetch error keep the list that's on screen rather than blanking it,
+		// and never drag the user out of a run they've opened.
+		if m.refresh && (m.err != nil || a.mode != modeList) {
+			a.err = m.err
+			return a, nil
+		}
+		a.err = m.err
+		switch {
+		case m.append:
 			a.runs = append(a.runs, m.runs...)
-		} else {
+		case m.refresh:
+			// Follow the selected run by ID: rows shift as new runs land, so
+			// holding the index would slide the cursor onto a different run.
+			sel := ""
+			if r := a.selectedRun(); r != nil {
+				sel = r.ID
+			}
+			a.runs = m.runs
+			a.selectRunByID(sel)
+		default:
 			a.runs = m.runs
 			a.selected = 0
 		}
@@ -819,10 +888,22 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.resize()
 		a.refresh()
-		if !m.append {
+		if !m.append && !m.refresh {
 			a.viewport.GotoTop()
 		}
 		return a, nil
+	case listPollMsg:
+		// Always re-arm: the chain outlives a visit to the graph view, so
+		// returning to the list resumes auto-refresh with no extra plumbing.
+		next := listPollTick(listPollInterval(a.runs))
+		// Skip the fetch (but keep ticking) when refreshing would take something
+		// away: a refresh returns page one only, so once the user has paged in
+		// more runs it would silently truncate what they scrolled to.
+		paged := a.cfg.Filter.Limit > 0 && len(a.runs) > a.cfg.Filter.Limit
+		if a.mode != modeList || a.client == nil || a.loadingMore || paged {
+			return a, next
+		}
+		return a, tea.Batch(refreshListCmd(a.client, a.cfg.Filter), next)
 	case runOpenedMsg:
 		a.err = m.err
 		if m.err == nil {

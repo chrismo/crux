@@ -6,6 +6,7 @@ package graph
 
 import (
 	"strings"
+	"time"
 
 	"github.com/chrismo/crux/internal/rwx"
 )
@@ -38,13 +39,18 @@ func (g *Graph) Node(key string) *Node {
 	return g.index[key]
 }
 
-// Build constructs a Graph from a run's top-level tasks.
-func Build(run rwx.Run) *Graph {
+// Build constructs a Graph from a run's top-level tasks, timing in-flight tasks
+// against the current clock.
+func Build(run rwx.Run) *Graph { return BuildAt(run, time.Now()) }
+
+// BuildAt is Build with the clock injected, so a running task's elapsed time is
+// reproducible in tests.
+func BuildAt(run rwx.Run, now time.Time) *Graph {
 	g := &Graph{index: make(map[string]*Node, len(run.Tasks))}
 
 	for i := range run.Tasks {
 		t := run.Tasks[i]
-		dur, has := duration(t)
+		dur, has := duration(t, now)
 		n := &Node{
 			Key:             t.Key,
 			TaskType:        t.TaskType,
@@ -83,7 +89,24 @@ func (g *Graph) resolveKey(ref string) string {
 	return ref
 }
 
-func duration(t rwx.Task) (int, bool) {
+// duration is a task's weight in seconds. A finished task reports its own
+// runtime, but a *running* task's runtime fields are not yet meaningful —
+// observed live, a running task carries ExecutionRuntimeSeconds=null and
+// CompletedRuntimeSeconds=0. Taking those at face value weighs it 0, which is
+// what froze the critical-path total mid-run, so the running case is checked
+// first and measured from StartedAt.
+func duration(t rwx.Task, now time.Time) (int, bool) {
+	// Keyed off the raw execution status, not DisplayState: a parallel task
+	// whose first subtask has failed reports Result=failed while Execution is
+	// still "running", and DisplayState ranks failed first (right for color,
+	// wrong for timing). Such a task is very much still burning wall-clock.
+	if t.Status.Execution == "running" {
+		if started, err := time.Parse(time.RFC3339, t.StartedAt); err == nil {
+			if secs := int(now.Sub(started).Seconds()); secs > 0 {
+				return secs, true
+			}
+		}
+	}
 	if t.ExecutionRuntimeSeconds != nil {
 		return *t.ExecutionRuntimeSeconds, true
 	}

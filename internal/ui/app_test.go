@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,9 @@ import (
 	"github.com/chrismo/crux/internal/graph"
 	"github.com/chrismo/crux/internal/rwx"
 )
+
+// errFetch stands in for a transient CLI/network failure.
+var errFetch = errors.New("rwx runs list: boom")
 
 func inflightRun() rwx.Run {
 	return rwx.Run{
@@ -39,6 +43,61 @@ func TestPollMsgRefreshesInFlight(t *testing.T) {
 	a = m.(App)
 	if _, cmd := a.Update(pollMsg{}); cmd == nil {
 		t.Error("pollMsg should refresh while in-flight")
+	}
+}
+
+// The run list has to keep itself current without a keypress (issue #1). The
+// poll tick drives that, and a background refresh must not yank the cursor off
+// the row the user is on or scroll them back to the top.
+func TestListAutoRefreshOnPoll(t *testing.T) {
+	runs := []rwx.RunSummary{
+		{ID: "r1", Title: "one"}, {ID: "r2", Title: "two"}, {ID: "r3", Title: "three"},
+	}
+	a := NewApp(nil, AppConfig{})
+	m, _ := a.Update(runsLoadedMsg{runs: runs})
+	a = m.(App)
+	a.selected = 2 // sitting on r3
+
+	// A tick while on the list schedules a re-fetch.
+	m, cmd := a.Update(listPollMsg{})
+	if cmd == nil {
+		t.Fatal("listPollMsg in list mode should issue a refresh + reschedule")
+	}
+	a = m.(App)
+
+	// A new page arrives with a run prepended: selection follows r3, not the index.
+	fresh := append([]rwx.RunSummary{{ID: "r0", Title: "brand new"}}, runs...)
+	m, _ = a.Update(runsLoadedMsg{runs: fresh, refresh: true})
+	a = m.(App)
+	if got := a.selectedRun(); got == nil || got.ID != "r3" {
+		t.Errorf("selection after refresh = %v, want r3", got)
+	}
+	if len(a.runs) != 4 {
+		t.Errorf("runs = %d, want 4 (refresh replaces the page)", len(a.runs))
+	}
+
+	// A failed background refresh must not blank the list the user is reading.
+	m, _ = a.Update(runsLoadedMsg{refresh: true, err: errFetch})
+	if got := len(m.(App).runs); got != 4 {
+		t.Errorf("runs after failed refresh = %d, want 4 (list preserved)", got)
+	}
+
+	// The tick keeps ticking while a run is open, so esc back to the list
+	// resumes auto-refresh instead of going quiet forever.
+	g := openGraph(t, "run_succeeded.json")
+	if _, cmd := g.Update(listPollMsg{}); cmd == nil {
+		t.Error("listPollMsg in graph mode should still reschedule the tick")
+	}
+
+	// Once the user has paged in a second page, a refresh (page one only) would
+	// truncate the list under them — so it re-arms without fetching.
+	p := NewApp(nil, AppConfig{Filter: rwx.ListFilter{Limit: 2}})
+	m, _ = p.Update(runsLoadedMsg{runs: fresh}) // 4 runs > limit 2 == paged
+	if _, cmd := m.(App).Update(listPollMsg{}); cmd == nil {
+		t.Error("paged list should still re-arm the tick")
+	}
+	if got := len(m.(App).runs); got != 4 {
+		t.Errorf("paged runs = %d, want 4 left intact", got)
 	}
 }
 
