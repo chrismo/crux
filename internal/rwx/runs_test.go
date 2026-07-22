@@ -60,3 +60,14 @@ func TestListFilterArgs(t *testing.T) {
 		t.Errorf("args = %v, want %v", got, want)
 	}
 }
+
+// Repository is a server-side scope, not a client-side substring: with several
+// repos sharing one org the most recent N runs can be all-other-repo, so the
+// narrowing has to happen before the page is cut.
+func TestListFilterArgsRepository(t *testing.T) {
+	got := ListFilter{Limit: 20, Repository: "crux"}.args()
+	want := []string{"runs", "list", "--json", "--limit", "20", "--repository", "crux"}
+	if !equalArgs(got, want) {
+		t.Errorf("args = %v, want %v", got, want)
+	}
+}

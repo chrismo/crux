@@ -42,6 +42,16 @@ func TestPollMsgRefreshesInFlight(t *testing.T) {
 	}
 }
 
+// Tab cycles all/mine/branch, but --repository is a session-wide scope that sits
+// outside that cycle — cycling must not silently drop you back to every repo.
+func TestCycleScopeKeepsRepository(t *testing.T) {
+	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{Limit: 30, Repository: "crux"}})
+	m, _ := a.cycleScope(1)
+	if got := m.(App).cfg.Filter.Repository; got != "crux" {
+		t.Errorf("Repository after cycleScope = %q, want crux", got)
+	}
+}
+
 func TestRefreshPreservesSelection(t *testing.T) {
 	a := openGraph(t, "run_succeeded.json")
 	a.selectedNode = "test"

@@ -26,6 +26,7 @@ var (
 // options holds the parsed command-line configuration.
 type options struct {
 	branch     string // branch to resolve a run for (default: current git branch)
+	repository string // repository name scoping the fetched run list (server-side)
 	definition string // substring scoping the run list to matching DefinitionPaths
 	run         string // explicit run ID to open
 	dir         string // checkout dir for the static-YAML fallback (default: cwd)
@@ -42,6 +43,7 @@ func parseFlags(args []string) (options, error) {
 	fs := flag.NewFlagSet("crux", flag.ContinueOnError)
 	var o options
 	fs.StringVar(&o.branch, "branch", "", "branch to resolve a run for (default: current git branch)")
+	fs.StringVar(&o.repository, "repository", "", "list only runs from this repository, case-insensitive (e.g. --repository crux)")
 	fs.StringVar(&o.definition, "definition", "", "scope the run list to definitions matching this substring (e.g. --definition app-dscout)")
 	fs.StringVar(&o.run, "run", "", "explicit run ID to open")
 	fs.StringVar(&o.dir, "dir", ".", "checkout directory for the static-YAML fallback")
@@ -93,7 +95,7 @@ func run(opts options) error {
 	if err := client.CheckVersion(context.Background()); err != nil {
 		return err
 	}
-	filter := rwx.ListFilter{Limit: 30, Branch: opts.branch, Mine: opts.mine}
+	filter := rwx.ListFilter{Limit: 30, Branch: opts.branch, Repository: opts.repository, Mine: opts.mine}
 	if opts.failed {
 		filter.ResultStatus = "failed"
 	}

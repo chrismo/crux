@@ -39,6 +39,7 @@ type Pagination struct {
 type ListFilter struct {
 	Limit        int
 	Branch       string
+	Repository   string // repository name, case-insensitive (server-side scope)
 	Mine         bool
 	ResultStatus string // succeeded|failed|debugged|sandboxed|no_result
 	Cursor       string
@@ -51,6 +52,9 @@ func (f ListFilter) args() []string {
 	}
 	if f.Branch != "" {
 		args = append(args, "--branch", f.Branch)
+	}
+	if f.Repository != "" {
+		args = append(args, "--repository", f.Repository)
 	}
 	if f.Mine {
 		args = append(args, "--mine")

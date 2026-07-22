@@ -49,6 +49,35 @@ func TestRenderRunList(t *testing.T) {
 	}
 }
 
+// The run list mixes repositories (one org, many repos), so each row has to say
+// which repo it belongs to — the header alone can't, since it's not uniform.
+func TestRenderRunListShowsRepository(t *testing.T) {
+	runs := []rwx.RunSummary{
+		{ID: "r1", DefinitionPath: ".rwx/ci.yml", Title: "one", RepositoryName: "crux", CreatedAt: "2026-06-30T20:00:00Z"},
+		{ID: "r2", DefinitionPath: ".rwx/ci.yml", Title: "two", RepositoryName: "questor", CreatedAt: "2026-06-30T20:00:00Z"},
+	}
+	lines := strings.Split(strings.TrimRight(RenderRunList(runs, 0, time.Date(2026, 6, 30, 21, 0, 0, 0, time.UTC)), "\n"), "\n")
+	if !strings.Contains(lines[0], "crux") {
+		t.Errorf("row 0 missing repo name: %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "questor") {
+		t.Errorf("row 1 missing repo name: %q", lines[1])
+	}
+}
+
+// FetchLabel reports the server-side scope, so --repository belongs there (not
+// in listStatus's client-side tier alongside def/filter).
+func TestFetchLabelRepository(t *testing.T) {
+	got := FetchLabel(rwx.ListFilter{Repository: "crux"})
+	if got != "repo: crux" {
+		t.Errorf("FetchLabel = %q, want %q", got, "repo: crux")
+	}
+	got = FetchLabel(rwx.ListFilter{Repository: "crux", Mine: true, ResultStatus: "failed"})
+	if !strings.Contains(got, "repo: crux") || !strings.Contains(got, "mine") || !strings.Contains(got, "failed") {
+		t.Errorf("combined FetchLabel = %q", got)
+	}
+}
+
 // FilterByDefinition is the --definition scope: a substring match over the
 // DefinitionPath ONLY (not Title/Branch), case-insensitive.
 func TestFilterByDefinition(t *testing.T) {

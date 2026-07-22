@@ -71,6 +71,9 @@ func FetchLabel(f rwx.ListFilter) string {
 	if f.Branch != "" {
 		parts = append(parts, "branch: "+f.Branch)
 	}
+	if f.Repository != "" {
+		parts = append(parts, "repo: "+f.Repository)
+	}
 	if f.ResultStatus != "" {
 		parts = append(parts, f.ResultStatus)
 	}
@@ -123,8 +126,9 @@ func RenderRunList(runs []rwx.RunSummary, selected int, now time.Time) string {
 		// Columns are padded by display width (not bytes) and truncated to fixed
 		// widths, so multibyte titles and long definition paths can't shove the
 		// row out of alignment.
-		row := fmt.Sprintf("%s%s  %s  %s  %s  %s",
+		row := fmt.Sprintf("%s%s  %s  %s  %s  %s  %s",
 			cursor, left,
+			padRight(r.RepositoryName, 14),
 			padRight(r.DefinitionPath, 18),
 			padRight(r.Title, 26),
 			padLeft(humanizeAge(r.CreatedAt, now), 8),

@@ -137,11 +137,10 @@ func short(id string) string {
 // is the --definition scope, and filter is the active view-filter term.
 func HomeView(runs []rwx.RunSummary, selected int, now time.Time, scope, def, filter string, total int) string {
 	var b strings.Builder
-	header := "crux"
-	if len(runs) > 0 && runs[0].RepositoryName != "" {
-		header += " · " + runs[0].RepositoryName
-	}
-	b.WriteString(theme.Header.Render(header))
+	// No repo in the header: the list mixes repositories, so naming the first
+	// run's repo mislabels the rest. Each row carries its own repo column now,
+	// and an explicit --repository scope shows up in the status line.
+	b.WriteString(theme.Header.Render("crux"))
 	if s := listStatus(scope, def, filter, len(runs), total); s != "" {
 		b.WriteString("  " + theme.Special.Render(s))
 	}
@@ -759,16 +758,19 @@ func (a App) cycleScope(dir int) (tea.Model, tea.Cmd) {
 		}
 	}
 	limit := a.cfg.Filter.Limit
+	// The repository scope is orthogonal to the cycle: it came from --repository
+	// and outlives all/mine/branch, so it rides along on every rebuilt filter.
+	repo := a.cfg.Filter.Repository
 	for i := 1; i <= len(order); i++ {
 		next := order[((cur+dir*i)%len(order)+len(order))%len(order)]
 		switch next {
 		case "all":
-			return a.reloadList(rwx.ListFilter{Limit: limit})
+			return a.reloadList(rwx.ListFilter{Limit: limit, Repository: repo})
 		case "mine":
-			return a.reloadList(rwx.ListFilter{Limit: limit, Mine: true})
+			return a.reloadList(rwx.ListFilter{Limit: limit, Repository: repo, Mine: true})
 		case "branch":
 			if r := a.selectedRun(); r != nil && r.Branch != "" {
-				return a.reloadList(rwx.ListFilter{Limit: limit, Branch: r.Branch})
+				return a.reloadList(rwx.ListFilter{Limit: limit, Repository: repo, Branch: r.Branch})
 			}
 			// no branch to scope to — keep cycling past it
 		}
