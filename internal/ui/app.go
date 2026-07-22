@@ -807,20 +807,26 @@ func (a App) cycleScope(dir int) (tea.Model, tea.Cmd) {
 			cur = i
 		}
 	}
-	limit := a.cfg.Filter.Limit
-	// The repository scope is orthogonal to the cycle: it came from --repository
-	// and outlives all/mine/branch, so it rides along on every rebuilt filter.
-	repo := a.cfg.Filter.Repository
+	// Start from the live filter and change only what the cycle owns, rather
+	// than rebuilding it from scratch: the scopes outside the cycle (the
+	// --repository name, --failed's result status) have to ride along, or Tab
+	// silently widens the list with nothing in the header to explain why.
+	base := a.cfg.Filter
+	base.Cursor = "" // a new scope always starts at page one
 	for i := 1; i <= len(order); i++ {
 		next := order[((cur+dir*i)%len(order)+len(order))%len(order)]
+		f := base
+		f.Mine, f.Branch = false, "" // the cycle's own fields, reset each step
 		switch next {
 		case "all":
-			return a.reloadList(rwx.ListFilter{Limit: limit, Repository: repo})
+			return a.reloadList(f)
 		case "mine":
-			return a.reloadList(rwx.ListFilter{Limit: limit, Repository: repo, Mine: true})
+			f.Mine = true
+			return a.reloadList(f)
 		case "branch":
 			if r := a.selectedRun(); r != nil && r.Branch != "" {
-				return a.reloadList(rwx.ListFilter{Limit: limit, Repository: repo, Branch: r.Branch})
+				f.Branch = r.Branch
+				return a.reloadList(f)
 			}
 			// no branch to scope to — keep cycling past it
 		}

@@ -101,13 +101,28 @@ func TestListAutoRefreshOnPoll(t *testing.T) {
 	}
 }
 
-// Tab cycles all/mine/branch, but --repository is a session-wide scope that sits
-// outside that cycle — cycling must not silently drop you back to every repo.
-func TestCycleScopeKeepsRepository(t *testing.T) {
-	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{Limit: 30, Repository: "crux"}})
+// Tab cycles all/mine/branch. The scopes that sit *outside* that cycle —
+// --repository and --failed — must ride through it: rebuilding the filter from
+// scratch would silently drop the user back to every repo, or to every result
+// status, with nothing in the header to explain why the list grew.
+func TestCycleScopeKeepsOrthogonalScopes(t *testing.T) {
+	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{
+		Limit: 30, Repository: "crux", ResultStatus: "failed",
+	}})
 	m, _ := a.cycleScope(1)
-	if got := m.(App).cfg.Filter.Repository; got != "crux" {
-		t.Errorf("Repository after cycleScope = %q, want crux", got)
+	got := m.(App).cfg.Filter
+	if got.Repository != "crux" {
+		t.Errorf("Repository after cycleScope = %q, want crux", got.Repository)
+	}
+	if got.ResultStatus != "failed" {
+		t.Errorf("ResultStatus after cycleScope = %q, want failed", got.ResultStatus)
+	}
+	// And still there after a full lap back to where it started.
+	for i := 0; i < 3; i++ {
+		m, _ = m.(App).cycleScope(1)
+	}
+	if got := m.(App).cfg.Filter; got.Repository != "crux" || got.ResultStatus != "failed" {
+		t.Errorf("after a full cycle = %+v, want repo crux / status failed", got)
 	}
 }
 
