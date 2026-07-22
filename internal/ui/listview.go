@@ -71,8 +71,10 @@ func FetchLabel(f rwx.ListFilter) string {
 	if f.Branch != "" {
 		parts = append(parts, "branch: "+f.Branch)
 	}
-	if f.Repository != "" {
-		parts = append(parts, "repo: "+f.Repository)
+	// The resolved names, not the term the user typed: `--repository cru`
+	// showing "repo: crux" is how they learn what it actually matched.
+	if len(f.Repositories) > 0 {
+		parts = append(parts, "repo: "+strings.Join(f.Repositories, ", "))
 	}
 	if f.ResultStatus != "" {
 		parts = append(parts, f.ResultStatus)

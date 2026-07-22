@@ -68,11 +68,16 @@ func TestRenderRunListShowsRepository(t *testing.T) {
 // FetchLabel reports the server-side scope, so --repository belongs there (not
 // in listStatus's client-side tier alongside def/filter).
 func TestFetchLabelRepository(t *testing.T) {
-	got := FetchLabel(rwx.ListFilter{Repository: "crux"})
+	got := FetchLabel(rwx.ListFilter{Repositories: []string{"crux"}})
 	if got != "repo: crux" {
 		t.Errorf("FetchLabel = %q, want %q", got, "repo: crux")
 	}
-	got = FetchLabel(rwx.ListFilter{Repository: "crux", Mine: true, ResultStatus: "failed"})
+	// A substring that resolved to several repos names them all, so the list
+	// isn't silently wider than the term suggests.
+	if got := FetchLabel(rwx.ListFilter{Repositories: []string{"crux", "crux-docs"}}); got != "repo: crux, crux-docs" {
+		t.Errorf("multi-repo FetchLabel = %q", got)
+	}
+	got = FetchLabel(rwx.ListFilter{Repositories: []string{"crux"}, Mine: true, ResultStatus: "failed"})
 	if !strings.Contains(got, "repo: crux") || !strings.Contains(got, "mine") || !strings.Contains(got, "failed") {
 		t.Errorf("combined FetchLabel = %q", got)
 	}

@@ -36,7 +36,7 @@ exits with a version complaint, `brew upgrade rwx-cloud/tap/rwx`.
 crux                      # home: a list of recent runs — pick one, hit enter
 crux --run <run-id>       # jump straight into a run's flow graph
 crux --branch <name>      # filter the list to a branch
-crux --repository crux    # filter the list to a repository (case-insensitive)
+crux --repository crux    # scope the list to repositories matching a substring
 crux --definition dscout  # scope the list to definitions matching a substring
 crux --print              # render once to stdout and exit (no TUI; handy for pipes)
 crux --version

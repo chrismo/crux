@@ -107,12 +107,12 @@ func TestListAutoRefreshOnPoll(t *testing.T) {
 // status, with nothing in the header to explain why the list grew.
 func TestCycleScopeKeepsOrthogonalScopes(t *testing.T) {
 	a := NewApp(nil, AppConfig{Filter: rwx.ListFilter{
-		Limit: 30, Repository: "crux", ResultStatus: "failed",
+		Limit: 30, Repositories: []string{"crux"}, ResultStatus: "failed",
 	}})
 	m, _ := a.cycleScope(1)
 	got := m.(App).cfg.Filter
-	if got.Repository != "crux" {
-		t.Errorf("Repository after cycleScope = %q, want crux", got.Repository)
+	if len(got.Repositories) != 1 || got.Repositories[0] != "crux" {
+		t.Errorf("Repositories after cycleScope = %v, want [crux]", got.Repositories)
 	}
 	if got.ResultStatus != "failed" {
 		t.Errorf("ResultStatus after cycleScope = %q, want failed", got.ResultStatus)
@@ -121,7 +121,7 @@ func TestCycleScopeKeepsOrthogonalScopes(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		m, _ = m.(App).cycleScope(1)
 	}
-	if got := m.(App).cfg.Filter; got.Repository != "crux" || got.ResultStatus != "failed" {
+	if got := m.(App).cfg.Filter; len(got.Repositories) != 1 || got.ResultStatus != "failed" {
 		t.Errorf("after a full cycle = %+v, want repo crux / status failed", got)
 	}
 }

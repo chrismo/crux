@@ -43,7 +43,7 @@ func parseFlags(args []string) (options, error) {
 	fs := flag.NewFlagSet("crux", flag.ContinueOnError)
 	var o options
 	fs.StringVar(&o.branch, "branch", "", "branch to resolve a run for (default: current git branch)")
-	fs.StringVar(&o.repository, "repository", "", "list only runs from this repository, case-insensitive (e.g. --repository crux)")
+	fs.StringVar(&o.repository, "repository", "", "scope the list to repositories matching this substring (e.g. --repository crux)")
 	fs.StringVar(&o.definition, "definition", "", "scope the run list to definitions matching this substring (e.g. --definition app-dscout)")
 	fs.StringVar(&o.run, "run", "", "explicit run ID to open")
 	fs.StringVar(&o.dir, "dir", ".", "checkout directory for the static-YAML fallback")
@@ -95,9 +95,18 @@ func run(opts options) error {
 	if err := client.CheckVersion(context.Background()); err != nil {
 		return err
 	}
-	filter := rwx.ListFilter{Limit: 30, Branch: opts.branch, Repository: opts.repository, Mine: opts.mine}
+	filter := rwx.ListFilter{Limit: 30, Branch: opts.branch, Mine: opts.mine}
 	if opts.failed {
 		filter.ResultStatus = "failed"
+	}
+	// --repository takes a substring like every other filter, but the CLI's
+	// flag matches whole names, so resolve one to the other before fetching.
+	if opts.repository != "" {
+		repos, err := client.ResolveRepositories(context.Background(), opts.repository)
+		if err != nil {
+			return err
+		}
+		filter.Repositories = repos
 	}
 
 	// Headless render: one-shot fetch + print, no TUI loop.
